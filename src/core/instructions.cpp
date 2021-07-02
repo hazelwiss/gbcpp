@@ -206,7 +206,7 @@ consteval RI8 determine_reg(){
 }
 
 template<size_t iter=0>
-consteval void fill_cb_table_bit(_instr_array& arg){
+consteval void fill_cb_table_bit(_instr_array& arg){ 
     constexpr RI8 reg = determine_reg<iter>();
     constexpr BIT bit = (BIT)(iter/8);
     if constexpr(iter >= 0x40)

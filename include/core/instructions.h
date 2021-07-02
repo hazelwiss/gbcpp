@@ -33,7 +33,6 @@ using _instr_array = std::array<
     cpu_function_entry,
     INSTR_ARRAY_SIZE>;
 
-
 namespace instr_table{
     extern const _instr_array noncb_range;
     extern const _instr_array cb_range; 

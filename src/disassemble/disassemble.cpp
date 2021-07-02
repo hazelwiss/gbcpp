@@ -593,3 +593,9 @@ std::string disassembler_t::labelify_opc(uint8_t opc, uint16_t imm){
     }
     return labels[opc];
 }
+
+std::pair<uint16_t,uint16_t> disassembler_t::get_branch_results(uint8_t opc, uint16_t imm){
+    if(!is_noncb_branch(opc))
+        throw std::runtime_error("tried to get branch results from non-branchable instruction");
+    // work on this!
+}

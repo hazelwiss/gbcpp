@@ -14,4 +14,5 @@ protected:
     cpu_t cpu;
     memory_t mem;
     scheduler_t scheduler;
+    friend struct dbg_window;
 };
