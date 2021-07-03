@@ -3,6 +3,7 @@
 #include<memory/cart.h>
 #include<vector>
 #include<string>
+#include<functional>
 
 template<typename t>
 struct banks_t{
@@ -15,15 +16,22 @@ protected:
     std::vector<t> banks{1};
 };
 
+struct mbc_t{
+    //  keep rom banks here, and also ram banks/external ram
+    //  probably put this in another header... will use inheritance later to determine mbc behaviour.
+};
+
 struct memory_t{
     uint8_t read(uint16_t adr);
     void write(uint16_t adr, uint8_t val);
     void load_rom(std::string path);
+    void bind_unbind_bootrom_callbk(std::function<void()> arg){ unbind_bootrom_callbk=arg; };
 protected:
     void bind_boot_rom();
     void unbind_boot_rom();
     void on_rom_write(uint16_t adr);
     void parse_rom_info();
+    bool boot_rom_bound{false};
     rom_info_t info;
     rom_bank_t rom1, unbinded_rom;
     banks_t<rom_bank_t> rom2;
@@ -36,4 +44,5 @@ protected:
     std::array<uint8_t,0x7F> io_regs;
     std::array<uint8_t,0x7E> hram;
     uint8_t ie;
+    std::function<void()> unbind_bootrom_callbk;
 };

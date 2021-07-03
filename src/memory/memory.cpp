@@ -4,7 +4,7 @@
 
 uint8_t memory_t::read(uint16_t adr){
     switch(adr){
-    case 0x100:             unbind_boot_rom();
+    case 0x100:             if(boot_rom_bound) unbind_boot_rom();
     case 0x0000 ... 0x00FF:
     case 0x0101 ... 0x3FFF:
                             return rom1[adr];
@@ -55,6 +55,7 @@ void memory_t::load_rom(std::string path){
 }
 
 void memory_t::bind_boot_rom(){
+    boot_rom_bound = true;
     std::copy(rom1.begin(), rom1.end(), unbinded_rom.begin());
     std::ifstream boot_rom_stream{"roms/dmg_boot.bin", std::ios::binary};
     if(!boot_rom_stream)
@@ -63,7 +64,10 @@ void memory_t::bind_boot_rom(){
 }
 
 void memory_t::unbind_boot_rom(){
+    boot_rom_bound = false;
     std::copy(unbinded_rom.begin(), unbinded_rom.end(), rom1.begin());
+    if(unbind_bootrom_callbk)
+        unbind_bootrom_callbk();
 }
 
 void memory_t::on_rom_write(uint16_t adr){

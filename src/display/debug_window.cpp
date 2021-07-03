@@ -19,6 +19,9 @@ std::unordered_map<uint16_t, std::string> labels;
 
 void dbg_window::hook(interpreter_t& interp){
     interpreter = interp;
+    disasm = {};
+    disassembly = {};
+    labels = {};
     disassemble();
     labels = disasm.get_label_map();
 }
@@ -30,7 +33,6 @@ void dbg_window::disassemble(uint16_t adr){
     auto instr = (is_cb=(opc == 0xCB)) ? 
         instr_table::cb_range[interp.mem.read(adr+1)] : 
         instr_table::noncb_range[opc];
-    auto ticks = entry_get<CPU_ENTRY::TICKS>(instr);
     if(adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr) >= 0x8000)
         return;
     else if(!entry_get<CPU_ENTRY::BYTE_LENGTH>(instr))
@@ -49,7 +51,6 @@ void dbg_window::disassemble(uint16_t adr){
         instr = (is_cb=(opc == 0xCB)) ? 
             instr_table::cb_range[interp.mem.read(adr+1)] : 
             instr_table::noncb_range[opc];
-        ticks = entry_get<CPU_ENTRY::TICKS>(instr);
         if(adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr) >= 0x8000)
             return;
         else if(!entry_get<CPU_ENTRY::BYTE_LENGTH>(instr))
@@ -137,7 +138,7 @@ void dbg_window::draw_reg_subwindow(){
 }
 
 void dbg_window::draw_disasm_subwindow(){
-    if(ImGui::BeginChild("disassembly", {size_x/1.6f,0}, true)){
+    if(ImGui::BeginChild("disassembly", {size_x/1.8f,0}, true)){
         //  memory pos slider
         //uint16_t step = 1, fast_step = step;
         //if(ImGui::InputScalar("", ImGuiDataType_U16, &disasm_pos, &step, &fast_step, "%04X", ImGuiInputTextFlags_CharsHexadecimal))

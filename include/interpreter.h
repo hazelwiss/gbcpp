@@ -8,11 +8,12 @@
 #include<memory/memory.h>
 
 struct interpreter_t{
+    interpreter_t();
     void update();
     void load_rom(const std::string& path){ mem.load_rom(path); }
 protected:
-    cpu_t cpu;
     memory_t mem;
+    cpu_t cpu{mem};
     scheduler_t scheduler;
     friend struct dbg_window;
 };

@@ -22,7 +22,7 @@ using cpu_function_entry = std::tuple<size_t,  //  1: byte length of instruction
     _instr_ticks_entry,                         //  2: pair of (1) cycle with no branch (2) cycles with branch
     _cpu_function_prototype>;                   //  3: funcion pointer;    
 
-enum class CPU_ENTRY{ BYTE_LENGTH,TICKS,FUNCTION };
+enum class CPU_ENTRY{ BYTE_LENGTH,CYCLES,FUNCTION };
 template<CPU_ENTRY entry>
 constexpr auto& entry_get(cpu_function_entry e){
     return std::get<(uint32_t)entry>(e);

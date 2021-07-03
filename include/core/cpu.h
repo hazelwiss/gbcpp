@@ -3,6 +3,7 @@
 */
 #pragma once
 #include<common_defs.h>
+#include<memory/memory.h>
 #include<scheduler_trait.h>
 
 union cpu_register_t{
@@ -77,11 +78,13 @@ struct cpu_register_bank_t{
         }
     }
 private:
-    cpu_register_t bc,de,hl,sp,pc;
-    cpu_register_a_t af;
+    cpu_register_t bc{0},de{0},hl{0},sp{0},pc{0};
+    cpu_register_a_t af{0};
 };
 
 struct cpu_t: schedule_component_base_t{
+    cpu_t(memory_t& mem): mem{mem} {}
+    void tick_step(size_t ticks);
     bool halted,stopped;
     struct { 
         void tick_t_cycles(size_t s){ t_cycles+=s; }
@@ -97,4 +100,5 @@ struct cpu_t: schedule_component_base_t{
         uint16_t imm16;
         uint8_t& imm8{reinterpret_cast<uint8_t&>(imm16)};
     } instr_info;
+    memory_t& mem;
 };
