@@ -1,7 +1,7 @@
 BUILD_FOLDER:=build
 EXECUTABLE:=gbcpp
 CXX:=g++
-CXXFLAGS:=-O0 -g -Wall -I"include" -I"imgui" --std=gnu++20
+CXXFLAGS:=-O0 -g -Wall -I"include" -I"imgui" --std=gnu++20 
 SOURCE_FILES_SUFFIX:=-name "*.cpp"
 HEADER_FILES:=$(shell find include -name "*.h")
 SOURCE_FILES:=$(shell find src ${SOURCE_FILES_SUFFIX})
@@ -13,7 +13,7 @@ IMGUI_SOURCE_FILE+=imgui/backends/imgui_impl_opengl3.cpp
 IMGUI_CXXFLAGS:= -O3 -I"imgui"
 IMGUI_OBJECT_FILES:= $(addprefix $(BUILD_FOLDER)/,$(addsuffix .o,$(IMGUI_SOURCE_FILE)))
 
-CXXLIBS:=-lglfw -lGL -lGLEW
+CXXLIBS:=-lglfw -lGL -lGLEW -lpthread
 
 all: imgui app
 

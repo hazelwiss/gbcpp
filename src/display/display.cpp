@@ -5,10 +5,13 @@
 #include<GL/glew.h>
 #include<GLFW/glfw3.h>
 #include<iostream>
+#include<thread>
 
 bool main_window::enable_debug_window{false};
+bool main_window::enable_display{false};
 
 GLFWwindow* window;
+std::thread thread;
 
 void glfw_error_callback(int error, const char* description){
     std::cout << "application aborted with code: " << error << "and error string:";
@@ -16,7 +19,7 @@ void glfw_error_callback(int error, const char* description){
     std::abort();
 }
 
-void main_window::init(interpreter_t& interp){
+void main_window::threaded_loop(){
     const std::string glsl_version = "#version 130";
     glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit() == GLFW_FALSE)
@@ -33,8 +36,27 @@ void main_window::init(interpreter_t& interp){
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version.c_str());
-    //  initializing other singletons
+    while(true){
+        if(enable_display){
+            draw();
+        }
+    }
+}
+
+void main_window::init(){
+    thread = std::thread(threaded_loop);
+}
+
+void main_window::bind(interpreter_t& interp){
     dbg_window::hook(interp);
+}
+
+void main_window::start(){
+    enable_display = true;
+}
+
+void main_window::stop(){
+    enable_display = false;
 }
 
 void main_window::draw(){

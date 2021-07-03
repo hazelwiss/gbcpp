@@ -10,7 +10,9 @@ struct dbg_window{
     static void reset_disasm();
     static float size_x,size_y;
 protected:
-    static void disassemble(bool should_branch=true, uint16_t adr=0);
+    static void draw_reg_subwindow();
+    static void draw_disasm_subwindow();
+    static void disassemble(uint16_t adr=0);
     static uint16_t disasm_pos;
     static std::reference_wrapper<interpreter_t> interpreter;
     static interpreter_t placeholder;

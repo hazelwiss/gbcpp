@@ -2,6 +2,7 @@
 #include<stdexcept>
 #include<sstream>
 #include<iomanip>
+#include<cstring>
 
 std::array<const char*,256> disassembler_t::noncb_mnemonic = {
     "nop",
@@ -536,14 +537,14 @@ std::array<bool,256> disassembler_t::labelify = {
 /*A*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
 /*B*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
 
-/*C*/    false,false,true,true,       true,false,false,true,         false,false,true,false,       true,false,false,true,
+/*C*/    false,false,true,true,       true,false,false,true,         false,false,true,false,       true,true,false,true,
 /*D*/    false,false,true,false,      true,false,false,true,         false,false,true,false,       true,false,false,true,
 /*E*/    false,false,false,false,     false,false,false,true,        false,false,false,false,      false,false,false,true,
 /*F*/    false,false,false,false,     false,false,false,true,        false,false,false,false,      false,false,false,true
 };
 
 
-std::string disassembler_t::disassemble(uint8_t opc, uint16_t imm){
+std::string disassembler_t::disassemble(uint8_t opc, uint16_t offset, uint16_t imm){
     std::stringstream sstr;
     std::string str = noncb_mnemonic[opc];
     if(size_t pos = str.find('%'); pos != std::string::npos){
@@ -552,16 +553,16 @@ std::string disassembler_t::disassemble(uint8_t opc, uint16_t imm){
         if(arg == '1'){
             std::string insert = "";
             if(labelify[opc])
-                insert = std::move(labelify_opc(opc, imm));
+                insert = std::move(labelify_opc(opc, offset, imm));
             else{
-                sstr << std::hex << std::setfill('0') << std::setw(4) << std::uppercase << imm << "h";
+                sstr << std::hex << std::setfill('0') << std::setw(2) << std::uppercase << (imm&0xFF) << "h";
                 insert = sstr.str();
             }
             str.insert(pos, insert);
         } else if(arg == '2'){
             std::string insert = "";
             if(labelify[opc])
-                insert = std::move(labelify_opc(opc, imm));
+                insert = std::move(labelify_opc(opc, offset, imm));
             else{
                 sstr << std::hex << std::setfill('0') << std::setw(4) << std::uppercase << imm << "h";
                 insert = sstr.str();
@@ -570,7 +571,7 @@ std::string disassembler_t::disassemble(uint8_t opc, uint16_t imm){
         } else if(arg == '-'){
             std::string insert = "";
             if(labelify[opc])
-                insert = std::move(labelify_opc(opc, imm));
+                insert = std::move(labelify_opc(opc, offset, imm));
             else
                 insert = std::to_string(static_cast<int8_t>(imm));
             str.insert(pos, insert);
@@ -585,17 +586,38 @@ std::string disassembler_t::disassemble_cb(uint8_t opc){
     return cb_mnemonic[opc];
 }
 
-std::string disassembler_t::labelify_opc(uint8_t opc, uint16_t imm){
+std::string disassembler_t::labelify_opc(uint8_t opc, uint16_t offset, uint16_t imm){
+    uint16_t adr = 0;
     if(!labels.contains(imm)){
+        if(
+            opc == 0x18 ||
+            opc == 0x28 ||
+            opc == 0x38 ||
+            opc == 0x20 ||
+            opc == 0x30
+        ){
+            adr = offset+static_cast<int8_t>(imm);
+        } else 
+            adr = imm;
         std::stringstream sstr;
-        sstr << std::hex << std::setfill('0') << std::setw(4) << std::uppercase << imm << "h";
-        labels[opc] = static_cast<std::string>("adr_")+sstr.str();
+        sstr << std::hex << std::setfill('0') << std::setw(4) << std::uppercase << adr << "h";
+        labels[adr] = static_cast<std::string>("adr_")+sstr.str();
     }
-    return labels[opc];
+    return labels[adr];
 }
 
-std::pair<uint16_t,uint16_t> disassembler_t::get_branch_results(uint8_t opc, uint16_t imm){
+uint16_t disassembler_t::get_branch_results(uint8_t opc, uint16_t offset, uint16_t imm){
     if(!is_noncb_branch(opc))
         throw std::runtime_error("tried to get branch results from non-branchable instruction");
-    // work on this!
+    if(
+        opc == 0x18 ||
+        opc == 0x28 ||
+        opc == 0x38 ||
+        opc == 0x20 ||
+        opc == 0x30
+    ){
+        return offset+static_cast<int8_t>(imm);
+    } else{
+        return imm;
+    }
 }
