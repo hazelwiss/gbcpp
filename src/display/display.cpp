@@ -1,4 +1,5 @@
 #include<display/display.h>
+#ifdef DEBUG_MODE
 #include<display/imgui_backends.h>
 #include<display/debug_window.h>
 #include<interpreter.h>
@@ -26,7 +27,7 @@ void main_window::threaded_loop(){
         throw std::runtime_error("error occured during initialization of glfw.");
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    window = glfwCreateWindow(400,400,"sometitle",NULL,NULL);
+    window = glfwCreateWindow(1920,1080,"sometitle",NULL,NULL);
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // Enable vsync
     if(glewInit() != GLEW_OK)
@@ -91,3 +92,5 @@ void main_window::draw_main_menu(){
         ImGui::EndMainMenuBar();
     }
 }
+
+#endif

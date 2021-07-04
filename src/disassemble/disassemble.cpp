@@ -520,7 +520,7 @@ std::array<const char*,256> disassembler_t::cb_mnemonic = {
     "set 7, (HL)",
     "set 7, A"
 };
-std::array<bool,256> disassembler_t::labelify = {
+std::array<bool,256> disassembler_t::labelify_table = {
 //       0     1     2     3          4     5     6     7            8     9     A     B           C     D     E     F       
 /*0*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
 /*1*/    false,false,false,false,     false,false,false,false,       true,false,false,false,       false,false,false,false,
@@ -543,62 +543,107 @@ std::array<bool,256> disassembler_t::labelify = {
 /*F*/    false,false,false,false,     false,false,false,true,        false,false,false,false,      false,false,false,true
 };
 
+std::array<bool,256> disassembler_t::ret_table = {
+//       0     1     2     3          4     5     6     7            8     9     A     B           C     D     E     F       
+/*0*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*1*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*2*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*3*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*4*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*5*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*6*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*7*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*8*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*9*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*A*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*B*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*C*/    true,false,false,false,     false,false,false,false,        true,true,false,false,        false,false,false,false,
+/*D*/    true,false,false,false,     false,false,false,false,        true,true,false,false,        false,false,false,false,
+/*E*/    false,false,false,false,    false,false,false,false,        false,false,false,false,      false,false,false,false,
+/*F*/    false,false,false,false,    false,false,false,false,        false,false,false,false,      false,false,false,false
+};
+
+std::array<bool,256> disassembler_t::call_table = {
+//       0     1     2     3          4     5     6     7            8     9     A     B           C     D     E     F       
+/*0*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*1*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*2*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*3*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*4*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*5*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*6*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*7*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*8*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*9*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*A*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*B*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*C*/    false,false,false,false,     true,false,false,false,        false,false,false,false,       true,true,false,false,
+/*D*/    false,false,false,false,     true,false,false,false,        false,false,false,false,       true,false,false,false,
+/*E*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*F*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false
+};
 
 std::string disassembler_t::disassemble(uint8_t opc, uint16_t offset, uint16_t imm){
-    std::stringstream sstr;
-    std::string str = noncb_mnemonic[opc];
-    if(size_t pos = str.find('%'); pos != std::string::npos){
-        char arg = str[pos+1];
-        str.erase(pos,2);
-        if(arg == '1'){
-            std::string insert = "";
-            if(labelify[opc])
-                insert = std::move(labelify_opc(opc, offset, imm));
-            else{
-                sstr << std::hex << std::setfill('0') << std::setw(2) << std::uppercase << (imm&0xFF) << "h";
-                insert = sstr.str();
+    if(opc != 0xCB){
+        std::stringstream sstr;
+        std::string str = noncb_mnemonic[opc];
+        if(size_t pos = str.find('%'); pos != std::string::npos){
+            char arg = str[pos+1];
+            str.erase(pos,2);
+            if(arg == '1'){
+                std::string insert = "";
+                if(labelify_table[opc])
+                    insert = std::move(labelify_opc(opc, offset, imm));
+                else{
+                    sstr << std::hex << std::setfill('0') << std::setw(2) << std::uppercase << (imm&0xFF) << "h";
+                    insert = sstr.str();
+                }
+                str.insert(pos, insert);
+            } else if(arg == '2'){
+                std::string insert = "";
+                if(labelify_table[opc])
+                    insert = std::move(labelify_opc(opc, offset, imm));
+                else{
+                    sstr << std::hex << std::setfill('0') << std::setw(4) << std::uppercase << imm << "h";
+                    insert = sstr.str();
+                }
+                str.insert(pos, insert);
+            } else if(arg == '-'){
+                std::string insert = "";
+                if(labelify_table[opc])
+                    insert = std::move(labelify_opc(opc, offset, imm));
+                else
+                    insert = std::to_string(static_cast<int8_t>(imm));
+                str.insert(pos, insert);
+            } else{
+                std::runtime_error("error disassembling. Improper string formatting.");
             }
-            str.insert(pos, insert);
-        } else if(arg == '2'){
-            std::string insert = "";
-            if(labelify[opc])
-                insert = std::move(labelify_opc(opc, offset, imm));
-            else{
-                sstr << std::hex << std::setfill('0') << std::setw(4) << std::uppercase << imm << "h";
-                insert = sstr.str();
-            }
-            str.insert(pos, insert);
-        } else if(arg == '-'){
-            std::string insert = "";
-            if(labelify[opc])
-                insert = std::move(labelify_opc(opc, offset, imm));
-            else
-                insert = std::to_string(static_cast<int8_t>(imm));
-            str.insert(pos, insert);
-        } else{
-            std::runtime_error("error disassembling. Improper string formatting.");
         }
+        return str;
+    } else{
+        return cb_mnemonic[imm&0xFF];
     }
-    return str;
-}
-
-std::string disassembler_t::disassemble_cb(uint8_t opc){
-    return cb_mnemonic[opc];
 }
 
 std::string disassembler_t::labelify_opc(uint8_t opc, uint16_t offset, uint16_t imm){
     uint16_t adr = 0;
-    if(!labels.contains(imm)){
-        if(
-            opc == 0x18 ||
-            opc == 0x28 ||
-            opc == 0x38 ||
-            opc == 0x20 ||
-            opc == 0x30
-        ){
-            adr = offset+static_cast<int8_t>(imm);
-        } else 
-            adr = imm;
+    if(
+        opc == 0x18 ||
+        opc == 0x28 ||
+        opc == 0x38 ||
+        opc == 0x20 ||
+        opc == 0x30
+    ){
+        adr = offset+static_cast<int8_t>(imm);
+    } else 
+        adr = imm;
+    if(!labels.contains(adr)){
         std::stringstream sstr;
         sstr << std::hex << std::setfill('0') << std::setw(4) << std::uppercase << adr << "h";
         labels[adr] = static_cast<std::string>("adr_")+sstr.str();
@@ -620,4 +665,12 @@ uint16_t disassembler_t::get_branch_results(uint8_t opc, uint16_t offset, uint16
     } else{
         return imm;
     }
+}
+
+bool disassembler_t::is_call(uint8_t opc){
+    return call_table[opc];
+}
+
+bool disassembler_t::is_ret(uint8_t opc){
+    return ret_table[opc];
 }

@@ -1,3 +1,5 @@
+#include<common_defs.h>
+#ifdef DEBUG_MODE
 #include<display/debug_window.h>
 #include<display/imgui_backends.h>
 #include<display/display.h>
@@ -10,12 +12,12 @@ const std::string dbg_window::imgui_win_id = "dbg_debug_window";
 float dbg_window::size_x = 1000, dbg_window::size_y = 600;
 interpreter_t dbg_window::placeholder{};
 std::reference_wrapper<interpreter_t> dbg_window::interpreter{placeholder};
-uint16_t dbg_window::disasm_pos = 0;
 //  disassembler is globally instantiated
 disassembler_t disasm;
 //  ordered map for storing the disassembled code
 std::map<uint16_t, std::string> disassembly;
 std::unordered_map<uint16_t, std::string> labels;
+uint16_t breakpoint_insert;
 
 void dbg_window::hook(interpreter_t& interp){
     interpreter = interp;
@@ -29,9 +31,9 @@ void dbg_window::hook(interpreter_t& interp){
 void dbg_window::disassemble(uint16_t adr){
     auto& interp = interpreter.get();
     bool is_cb;
-    uint8_t opc = interp.mem.read(adr);
+    uint8_t opc = interp.mem.debug_read(adr);
     auto instr = (is_cb=(opc == 0xCB)) ? 
-        instr_table::cb_range[interp.mem.read(adr+1)] : 
+        instr_table::cb_range[interp.mem.debug_read(adr+1)] : 
         instr_table::noncb_range[opc];
     if(adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr) >= 0x8000)
         return;
@@ -39,17 +41,14 @@ void dbg_window::disassemble(uint16_t adr){
         return;
     while(!disasm.is_noncb_branch(opc) || is_cb){    //  sees if the instruction is a branch.
         if(!disassembly.contains(adr)){
-            if(opc != 0){
-                disassembly[adr] = is_cb ? 
-                    disasm.disassemble_cb(interp.mem.read(adr+1)) : 
-                    disasm.disassemble(opc, adr, interp.mem.read(adr+1)|(interp.mem.read(adr+2)<<8));
-            }
+            if(opc != 0)
+                disassembly[adr] = disasm.disassemble(opc, adr, interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8));
         } else
             return;
         adr+=entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
-        opc = interp.mem.read(adr);
+        opc = interp.mem.debug_read(adr);
         instr = (is_cb=(opc == 0xCB)) ? 
-            instr_table::cb_range[interp.mem.read(adr+1)] : 
+            instr_table::cb_range[interp.mem.debug_read(adr+1)] : 
             instr_table::noncb_range[opc];
         if(adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr) >= 0x8000)
             return;
@@ -57,11 +56,11 @@ void dbg_window::disassemble(uint16_t adr){
             return;
     }
     if(!disassembly.contains(adr)){
-        disassembly[adr] = disasm.disassemble(interp.mem.read(adr), 
-            adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr), interp.mem.read(adr+1)|(interp.mem.read(adr+2)<<8));
+        disassembly[adr] = disasm.disassemble(interp.mem.debug_read(adr), 
+            adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr), interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8));
     } else 
         return;
-    uint16_t imm = interp.mem.read(adr+1)|(interp.mem.read(adr+2)<<8);
+    uint16_t imm = interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8);
     adr += entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
     uint16_t branched_adr = disasm.get_branch_results(opc, adr, imm);
     disassemble(branched_adr);
@@ -75,10 +74,12 @@ void dbg_window::reset_disasm(){
 
 void dbg_window::draw(){
     ImGui::SetNextWindowSize({size_x, size_y});
-    if(ImGui::Begin(imgui_win_id.c_str(), &main_window::enable_debug_window)){
+    if(ImGui::Begin(imgui_win_id.c_str(), &main_window::enable_debug_window, ImGuiWindowFlags_NoCollapse)){
         draw_reg_subwindow();
         ImGui::SameLine();
         draw_disasm_subwindow();
+        ImGui::SameLine();
+        draw_control_subwindow();
         ImGui::End();
     }
 }
@@ -120,9 +121,9 @@ void dbg_window::draw_reg_subwindow(){
             for(size_t i = 0; i < 2; ++i){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::InputScalar(names[6+i*2].c_str(), ImGuiDataType_U8, &flags[i]);
+                ImGui::Text("%s: %d", names[6+i*2].c_str(), flags[i*2]);
                 ImGui::TableSetColumnIndex(1);
-                ImGui::InputScalar(names[7+i*2].c_str(), ImGuiDataType_U8, &flags[i+1]);
+                ImGui::Text("%s: %d", names[7+i*2].c_str(), flags[i*2+1]);
             }
             ImGui::EndTable();
         }
@@ -138,30 +139,90 @@ void dbg_window::draw_reg_subwindow(){
 }
 
 void dbg_window::draw_disasm_subwindow(){
-    if(ImGui::BeginChild("disassembly", {size_x/1.8f,0}, true)){
-        //  memory pos slider
-        //uint16_t step = 1, fast_step = step;
-        //if(ImGui::InputScalar("", ImGuiDataType_U16, &disasm_pos, &step, &fast_step, "%04X", ImGuiInputTextFlags_CharsHexadecimal))
-        //    disasm_pos = disasm_pos > upper_viewable_rom_address ? upper_viewable_rom_address : disasm_pos;
-        //  disassembly/breakpoints
+    auto& interp = interpreter.get();
+    if(ImGui::BeginChild("disassembly", {size_x/2.2f,0}, true)){
         if(ImGui::BeginTable("disassembly", 3, ImGuiTableFlags_SizingFixedFit)){
             //  column 0: breakpoints   column 1: address
             //  column 2: mnemonic  
-            ImVec4 col = {0.5,0.8,0.5,1};
+            ImVec4 col_green = {0.5,0.8,0.5,1};
+            ImVec4 col_red = {0.8,0.5,0.5,1};
             for(auto& entry: disassembly){
                 if(labels.contains(entry.first)){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::TextColored(col, "  %s:", labels[entry.first].c_str());
+                    ImGui::TextColored(col_green, "  %s:", labels[entry.first].c_str());
                 }
                 ImGui::TableNextRow();
+                if(entry.first == interp.cpu.regs.get<RI::PC>()){
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, 0xAAAAAAAA);
+                }
+                if(interp.cpu.code_breakpoints.contains(entry.first)){
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextColored(col_red, "%s", interp.cpu.code_breakpoints[entry.first] ? "B" : "D");
+                }
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text("%04X", entry.first);
                 ImGui::TableSetColumnIndex(2);
-                ImGui::TextColored(col, "%s", entry.second.c_str());
+                ImGui::TextColored(col_green, "%s", entry.second.c_str());
             }
             ImGui::EndTable();
         }
         ImGui::EndChild();
     }   
 }
+
+void dbg_window::draw_control_subwindow(){
+    auto& interp = interpreter.get();
+    if(ImGui::BeginChild("control", {0,0}, true)){
+        if(ImGui::ArrowButton("arrow", ImGuiDir_Right)){
+            interp.paused = false;
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("||")){
+            interp.paused = true;
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("->")){
+            interp.should_step = true;
+        }
+        ImGui::SameLine();
+        ImGui::Text("fps: %ld", interp.fps.load());
+        ImGui::SameLine();
+        ImGui::Text("%s", interp.paused ? "paused" : "running");
+        //  breakpoints menu.
+        ImGui::InputScalar("", ImGuiDataType_U16, &breakpoint_insert, nullptr, nullptr, "%04X", 
+            ImGuiInputTextFlags_CharsHexadecimal);
+        ImGui::SameLine();
+        if(ImGui::Button("remove")){
+            interp.cpu.code_breakpoints.erase(breakpoint_insert);
+        }
+        ImGui::Text("breakpoint: ");
+        ImGui::SameLine();
+        if(ImGui::Button("code")){
+            interp.cpu.code_breakpoints[breakpoint_insert] = true;
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("write")){
+
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("read")){
+
+        }
+        if(ImGui::BeginChild("breakpoints",{0,0},true)){
+            if(ImGui::BeginTable("breakpoints", 1)){
+                ImGui::Text("code breakpoints:");
+                for(auto entry: interp.cpu.code_breakpoints){
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%04X -> [%s]", entry.first, disassembly[entry.first].c_str());
+                }
+                ImGui::EndTable();
+            }
+            ImGui::EndChild();
+        }
+        ImGui::EndChild();
+    }
+}
+
+#endif

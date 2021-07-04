@@ -3,6 +3,14 @@
 #include<iostream>
 
 uint8_t memory_t::read(uint16_t adr){
+    __DEBUG_LINE(
+        if(read_breakpoints.size() > 0){
+            if(read_breakpoints.contains(adr)){
+                if(read_breakpoints[adr] && read_breakpoint_callbk)
+                    read_breakpoint_callbk(adr);
+            }
+        }
+    )
     switch(adr){
     case 0x100:             if(boot_rom_bound) unbind_boot_rom();
     case 0x0000 ... 0x00FF:
@@ -21,9 +29,33 @@ uint8_t memory_t::read(uint16_t adr){
     return 0xFF;
 }
 
+uint8_t memory_t::debug_read(uint16_t adr){ //  doesn't unbind boot rom.
+    switch(adr){
+    case 0x0000 ... 0x3FFF: return rom1[adr];
+    case 0x4000 ... 0x7FFF: return rom2.get()[adr-0x4000];
+    case 0x8000 ... 0x9FFF: return vram[adr-0x8000];
+    case 0xA000 ... 0xBFFF: return ram_banks.get()[adr-0xA000];
+    case 0xC000 ... 0xCFFF: return wram[adr-0xC000];
+    case 0xD000 ... 0xDFFF: return wram_banks.get()[adr-0xD000];
+    //case 0xE000 ... 0xFDFF: 
+    case 0xFE00 ... 0xFE9F: return oam[adr-0xFE00];
+    case 0xFF00 ... 0xFF7F: return io_regs[adr-0xFF00];
+    case 0xFF80 ... 0xFFFE: return hram[adr-0xFF80];
+    }
+    return 0xFF;
+}
+
 void memory_t::write(uint16_t adr, uint8_t val){
-    //if(adr == 0xFF01)
-    //    std::cout << val;
+    __DEBUG_LINE(
+        if(adr == 0xFF01)
+            std::cout << val;   //  tmp
+        if(write_breakpoints.size() > 0){
+            if(write_breakpoints.contains(adr)){
+                if(write_breakpoints[adr] && write_breakpoint_callbk)
+                    write_breakpoint_callbk(adr, val);
+            }
+        }
+    )
     switch(adr){
     case 0x0000 ... 0x7FFF: on_rom_write(adr);                     break;
     case 0x8000 ... 0x9FFF: vram[adr-0x8000]                = val; break;

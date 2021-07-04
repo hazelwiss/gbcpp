@@ -1,4 +1,6 @@
 #pragma once
+#include<common_defs.h>
+#ifdef DEBUG_MODE
 
 struct interpreter_t;
 
@@ -14,3 +16,5 @@ protected:
     static void draw_main_menu();
     static bool enable_display;
 };
+
+#endif

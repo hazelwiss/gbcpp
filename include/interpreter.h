@@ -6,6 +6,8 @@
 #include<scheduler.h>
 #include<core/cpu.h>
 #include<memory/memory.h>
+#include<atomic>
+#include<stack>
 
 struct interpreter_t{
     interpreter_t();
@@ -15,5 +17,11 @@ protected:
     memory_t mem;
     cpu_t cpu{mem};
     scheduler_t scheduler;
-    friend struct dbg_window;
+    __DEBUG_LINE(
+        std::atomic_bool paused{false};
+        std::atomic_bool should_step{false};
+        std::atomic_uint64_t fps;
+        std::stack<std::pair<uint16_t,uint16_t>> call_stack;
+        friend struct dbg_window;
+    )
 };

@@ -15,7 +15,8 @@ union cpu_register_t{
 };
 
 struct flags_t{
-    bool z:1,n:1,h:1,c:1;
+    uint8_t _unused:4{0};
+    uint8_t c:1,h:1,n:1,z:1;
 };
 
 union cpu_register_a_t{
@@ -71,10 +72,10 @@ struct cpu_register_bank_t{
     constexpr void set_flag(bool set){
         switch(f)
         {
-        case FI::Z: af._narrow._l.z = set != 0; break;
-        case FI::N: af._narrow._l.n = set != 0; break;
-        case FI::H: af._narrow._l.h = set != 0; break;
-        case FI::C: af._narrow._l.c = set != 0; break;
+        case FI::Z: af._narrow._l.z = (set != 0); break;
+        case FI::N: af._narrow._l.n = (set != 0); break;
+        case FI::H: af._narrow._l.h = (set != 0); break;
+        case FI::C: af._narrow._l.c = (set != 0); break;
         }
     }
 private:
@@ -85,7 +86,7 @@ private:
 struct cpu_t: schedule_component_base_t{
     cpu_t(memory_t& mem): mem{mem} {}
     void tick_step(size_t ticks);
-    bool halted,stopped;
+    bool halted{false},stopped{false};
     struct { 
         void tick_t_cycles(size_t s){ t_cycles+=s; }
         size_t get_t_cycles(){ return t_cycles; }
@@ -101,4 +102,9 @@ struct cpu_t: schedule_component_base_t{
         uint8_t& imm8{reinterpret_cast<uint8_t&>(imm16)};
     } instr_info;
     memory_t& mem;
+    //  debugging.
+    std::unordered_map<uint16_t, bool> code_breakpoints;
+    std::function<void(uint16_t, uint8_t, uint16_t)> code_breakpoints_callbk;
+    std::function<void(uint16_t, uint16_t)> enter_call_callbk;
+    std::function<void()> ret_from_call_callbk;
 };
