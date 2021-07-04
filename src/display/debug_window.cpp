@@ -1,5 +1,4 @@
 #include<common_defs.h>
-#ifdef DEBUG_MODE
 #include<display/debug_window.h>
 #include<display/imgui_backends.h>
 #include<display/display.h>
@@ -10,8 +9,8 @@
 
 const std::string dbg_window::imgui_win_id = "dbg_debug_window";
 float dbg_window::size_x = 1000, dbg_window::size_y = 600;
-interpreter_t dbg_window::placeholder{};
-std::reference_wrapper<interpreter_t> dbg_window::interpreter{placeholder};
+std::reference_wrapper<interpreter_t> dbg_window::interpreter{main_window::placeholder};
+interpreter_t* interp_arg{&main_window::placeholder};
 //  disassembler is globally instantiated
 disassembler_t disasm;
 //  ordered map for storing the disassembled code
@@ -20,12 +19,21 @@ std::unordered_map<uint16_t, std::string> labels;
 uint16_t breakpoint_insert;
 
 void dbg_window::hook(interpreter_t& interp){
+    interp_arg = &interp;
     interpreter = interp;
     disasm = {};
     disassembly = {};
     labels = {};
     disassemble();
     labels = disasm.get_label_map();
+}
+
+void dbg_window::on_pause(){
+    interpreter = *interp_arg;
+}
+
+void dbg_window::on_play(){
+    interpreter = main_window::placeholder;
 }
 
 void dbg_window::disassemble(uint16_t adr){
@@ -74,7 +82,9 @@ void dbg_window::reset_disasm(){
 
 void dbg_window::draw(){
     ImGui::SetNextWindowSize({size_x, size_y});
-    if(ImGui::Begin(imgui_win_id.c_str(), &main_window::enable_debug_window, ImGuiWindowFlags_NoCollapse)){
+    if(ImGui::Begin(imgui_win_id.c_str(), 
+        reinterpret_cast<bool*>(&main_window::enable_debug_window), ImGuiWindowFlags_NoCollapse))
+    {
         draw_reg_subwindow();
         ImGui::SameLine();
         draw_disasm_subwindow();
@@ -129,9 +139,24 @@ void dbg_window::draw_reg_subwindow(){
         }
         std::string text = "Call Stack";
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
-        ImGui::Text("Call Stack");
-        if(ImGui::BeginTable(text.c_str(), 2)){
-            //  do call stack here
+        ImGui::Text(text.c_str());
+        if(ImGui::BeginTable(text.c_str(), 1, 0, {0,size_y/4.55f})){
+            for(const auto& entry: interp.call_deque){
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%04X -> %04X", entry.first, entry.second);
+            }
+            ImGui::EndTable();
+        }
+        text = "Recent Instructions";
+        ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
+        ImGui::Text(text.c_str());
+        if(ImGui::BeginTable(text.c_str(), 1)){
+            for(const auto& entry: interp.recent_instr_deque){
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%04X: %s", entry.first, entry.second.c_str());
+            }
             ImGui::EndTable();
         }
         ImGui::EndChild();
@@ -172,34 +197,35 @@ void dbg_window::draw_disasm_subwindow(){
 }
 
 void dbg_window::draw_control_subwindow(){
-    auto& interp = interpreter.get();
     if(ImGui::BeginChild("control", {0,0}, true)){
         if(ImGui::ArrowButton("arrow", ImGuiDir_Right)){
-            interp.paused = false;
+            interp_arg->paused = false;
+            on_play();
         }
         ImGui::SameLine();
         if(ImGui::Button("||")){
-            interp.paused = true;
+            interp_arg->paused = true;
+            on_pause();
         }
         ImGui::SameLine();
         if(ImGui::Button("->")){
-            interp.should_step = true;
+            interp_arg->should_step = true;
         }
         ImGui::SameLine();
-        ImGui::Text("fps: %ld", interp.fps.load());
+        ImGui::Text("fps: %ld", interp_arg->fps.load());
         ImGui::SameLine();
-        ImGui::Text("%s", interp.paused ? "paused" : "running");
+        ImGui::Text("%s", interp_arg->paused ? "paused" : "running");
         //  breakpoints menu.
         ImGui::InputScalar("", ImGuiDataType_U16, &breakpoint_insert, nullptr, nullptr, "%04X", 
             ImGuiInputTextFlags_CharsHexadecimal);
         ImGui::SameLine();
         if(ImGui::Button("remove")){
-            interp.cpu.code_breakpoints.erase(breakpoint_insert);
+             interp_arg->cpu.code_breakpoints.erase(breakpoint_insert);
         }
         ImGui::Text("breakpoint: ");
         ImGui::SameLine();
         if(ImGui::Button("code")){
-            interp.cpu.code_breakpoints[breakpoint_insert] = true;
+            interp_arg->cpu.code_breakpoints[breakpoint_insert] = true;
         }
         ImGui::SameLine();
         if(ImGui::Button("write")){
@@ -212,7 +238,7 @@ void dbg_window::draw_control_subwindow(){
         if(ImGui::BeginChild("breakpoints",{0,0},true)){
             if(ImGui::BeginTable("breakpoints", 1)){
                 ImGui::Text("code breakpoints:");
-                for(auto entry: interp.cpu.code_breakpoints){
+                for(auto entry: interp_arg->cpu.code_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%04X -> [%s]", entry.first, disassembly[entry.first].c_str());
@@ -224,5 +250,3 @@ void dbg_window::draw_control_subwindow(){
         ImGui::EndChild();
     }
 }
-
-#endif

@@ -583,8 +583,8 @@ std::array<bool,256> disassembler_t::call_table = {
 /*A*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
 /*B*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
 
-/*C*/    false,false,false,false,     true,false,false,false,        false,false,false,false,       true,true,false,false,
-/*D*/    false,false,false,false,     true,false,false,false,        false,false,false,false,       true,false,false,false,
+/*C*/    false,false,false,false,     true,false,false,false,        false,false,false,false,      true,true,false,false,
+/*D*/    false,false,false,false,     true,false,false,false,        false,false,false,false,      true,false,false,false,
 /*E*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
 /*F*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false
 };

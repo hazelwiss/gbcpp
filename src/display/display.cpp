@@ -1,5 +1,4 @@
 #include<display/display.h>
-#ifdef DEBUG_MODE
 #include<display/imgui_backends.h>
 #include<display/debug_window.h>
 #include<interpreter.h>
@@ -8,8 +7,11 @@
 #include<iostream>
 #include<thread>
 
-bool main_window::enable_debug_window{false};
-bool main_window::enable_display{false};
+std::atomic_bool main_window::enable_debug_window{false};
+std::atomic_bool main_window::enable_display{false};
+interpreter_t main_window::placeholder{};
+std::atomic_bool main_window::request_handshake{false};
+std::atomic_bool main_window::allow_handshake{false};
 
 GLFWwindow* window;
 std::thread thread;
@@ -60,7 +62,16 @@ void main_window::stop(){
     enable_display = false;
 }
 
+void main_window::on_pause(){
+    dbg_window::on_pause();
+}
+
 void main_window::draw(){
+    if(request_handshake){
+        allow_handshake = true;
+        while(request_handshake);
+        allow_handshake = false;
+    }
     if(!glfwWindowShouldClose(window)){
         //  poll events.
         glfwPollEvents();
@@ -86,11 +97,9 @@ void main_window::draw(){
 void main_window::draw_main_menu(){
     if(ImGui::BeginMainMenuBar()){
         if(ImGui::BeginMenu("Debug")){
-            ImGui::MenuItem("Debugger", nullptr, &enable_debug_window);
+            ImGui::MenuItem("Debugger", nullptr, reinterpret_cast<bool*>(&enable_debug_window));
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
     }
 }
-
-#endif

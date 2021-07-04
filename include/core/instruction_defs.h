@@ -203,6 +203,7 @@ namespace instr_defs{
     //  JP
     inline void jp_n16(cfa arg){
         get_reg<RI::PC>(arg)=arg.cpu.instr_info.imm16;
+        arg.did_branch = true;
     }
     template<FI flag,BIT_VAL state> void jp_cc_n16(cfa arg){
         if((arg.did_branch = get_flag<flag>(arg)==state))
@@ -214,6 +215,7 @@ namespace instr_defs{
     //  JR
     inline void jr_e8(cfa arg){
         get_reg<RI::PC>(arg)+=(int8_t)arg.cpu.instr_info.imm8;
+        arg.did_branch = true;
     }
     template<FI flag, BIT_VAL state>
     inline void jr_cc_e8(cfa arg){
@@ -328,6 +330,7 @@ namespace instr_defs{
     inline void call_n16(cfa arg){
         push_r16<RI::PC>(arg);
         get_reg<RI::PC>(arg)=arg.cpu.instr_info.imm16;
+        arg.did_branch = true;
     }
     template<FI flag,BIT_VAL state> void call_cc_n16(cfa arg){
         if((arg.did_branch = get_flag<flag>(arg)==state))
@@ -345,6 +348,7 @@ namespace instr_defs{
     //  RET
     inline void ret(cfa arg){
         pop_r16<RI::PC>(arg);
+        arg.did_branch = true;
     }
     template<FI flag,BIT_VAL state> void ret_cc(cfa arg){
         if((arg.did_branch = get_flag<flag>(arg)==state))

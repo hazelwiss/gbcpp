@@ -5,6 +5,7 @@
 #include<common_defs.h>
 #include<memory/memory.h>
 #include<scheduler_trait.h>
+#include<disassemble/disassemble.h>
 
 union cpu_register_t{
     struct{
@@ -103,8 +104,10 @@ struct cpu_t: schedule_component_base_t{
     } instr_info;
     memory_t& mem;
     //  debugging.
+    disassembler_t disasm;
     std::unordered_map<uint16_t, bool> code_breakpoints;
     std::function<void(uint16_t, uint8_t, uint16_t)> code_breakpoints_callbk;
+    std::function<void(uint16_t, const std::string&)> instruction_execute_callbk;
     std::function<void(uint16_t, uint16_t)> enter_call_callbk;
     std::function<void()> ret_from_call_callbk;
 };

@@ -7,7 +7,7 @@
 #include<core/cpu.h>
 #include<memory/memory.h>
 #include<atomic>
-#include<stack>
+#include<deque>
 
 struct interpreter_t{
     interpreter_t();
@@ -17,11 +17,10 @@ protected:
     memory_t mem;
     cpu_t cpu{mem};
     scheduler_t scheduler;
-    __DEBUG_LINE(
-        std::atomic_bool paused{false};
-        std::atomic_bool should_step{false};
-        std::atomic_uint64_t fps;
-        std::stack<std::pair<uint16_t,uint16_t>> call_stack;
-        friend struct dbg_window;
-    )
+    std::atomic_bool paused{false};
+    std::atomic_bool should_step{false};
+    std::atomic_uint64_t fps;
+    std::deque<std::pair<uint16_t,uint16_t>> call_deque;
+    std::deque<std::pair<uint16_t,std::string>> recent_instr_deque;
+    friend struct dbg_window;
 };
