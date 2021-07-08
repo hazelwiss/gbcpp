@@ -36,7 +36,7 @@ std::array<const char*,256> disassembler_t::noncb_mnemonic = {
     "inc E",
     "dec E",
     "ld E, %1",
-    "RRA",
+    "rra",
     "jr nz, %-",
     "ld HL, %2",
     "ld (HL+), A",
@@ -589,6 +589,29 @@ std::array<bool,256> disassembler_t::call_table = {
 /*F*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false
 };
 
+std::array<bool,256> disassembler_t::conditional_table = {
+//       0     1     2     3          4     5     6     7            8     9     A     B           C     D     E     F       
+/*0*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*1*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*2*/    true,false,false,false,      false,false,false,false,       true,false,false,false,       false,false,false,false,
+/*3*/    true,false,false,false,      false,false,false,false,       true,false,false,false,       false,false,false,false,
+
+/*4*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*5*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*6*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*7*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*8*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*9*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*A*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*B*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+
+/*C*/    true,false,true,false,       true,false,false,false,        true,false,true,false,        true,false,false,false,
+/*D*/    true,false,true,false,       true,false,false,false,        true,false,true,false,        true,false,false,false,
+/*E*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false,
+/*F*/    false,false,false,false,     false,false,false,false,       false,false,false,false,      false,false,false,false
+};
+
 std::string disassembler_t::disassemble(uint8_t opc, uint16_t offset, uint16_t imm){
     if(opc != 0xCB){
         std::stringstream sstr;
@@ -673,4 +696,8 @@ bool disassembler_t::is_call(uint8_t opc){
 
 bool disassembler_t::is_ret(uint8_t opc){
     return ret_table[opc];
+}
+
+bool disassembler_t::is_conditional(uint8_t opc){
+    return conditional_table[opc];
 }

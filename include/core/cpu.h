@@ -63,10 +63,10 @@ struct cpu_register_bank_t{
     constexpr bool get_flag(){
         switch(f)
         {
-        case FI::Z: return af._narrow._l.z;
-        case FI::N: return af._narrow._l.n;
-        case FI::H: return af._narrow._l.h;
-        case FI::C: return af._narrow._l.c;
+        case FI::Z: return af._narrow._l.z != 0;
+        case FI::N: return af._narrow._l.n != 0;
+        case FI::H: return af._narrow._l.h != 0;
+        case FI::C: return af._narrow._l.c != 0;
         }
     }
     template<FI f>
@@ -85,7 +85,7 @@ private:
 };
 
 struct cpu_t: schedule_component_base_t{
-    cpu_t(memory_t& mem): mem{mem} {}
+    cpu_t(memory_t& mem): mem{&mem} {}
     void tick_step(size_t ticks);
     bool halted{false},stopped{false};
     struct { 
@@ -96,13 +96,23 @@ struct cpu_t: schedule_component_base_t{
         size_t t_cycles;
     } timer;
     cpu_register_bank_t regs;
+    bool ime{false};
     struct{
         uint8_t opcode;
         uint16_t ext_opcode;    //  used with cb
         uint16_t imm16;
         uint8_t& imm8{reinterpret_cast<uint8_t&>(imm16)};
     } instr_info;
-    memory_t& mem;
+    struct memory_wrapper_t{
+        memory_wrapper_t(memory_t* mem): mem{mem} {}        
+        uint8_t read(uint16_t adr){ return mem->read(adr); }
+        void write(uint16_t adr, uint8_t val){ mem->write(adr, val); }
+        memory_t& get(){ return *mem; }
+        memory_t& operator*(){ return get(); }
+        memory_t& operator->(){ return get(); }
+    protected:
+        memory_t* mem;
+    } mem;
     //  debugging.
     disassembler_t disasm;
     std::unordered_map<uint16_t, bool> code_breakpoints;

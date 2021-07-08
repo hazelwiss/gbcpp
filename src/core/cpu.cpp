@@ -2,7 +2,6 @@
 #include<core/instructions.h>
 #include<stdexcept>
 #include<iostream>
-#include<disassemble/disassemble.h>
 #include<iostream>
 
 void cpu_t::tick_step(size_t ticks){
@@ -10,7 +9,7 @@ void cpu_t::tick_step(size_t ticks){
     auto prev_pc = pc;
     uint8_t opc = mem.read(pc);
     cpu_function_entry instr;
-    cpu_function_argument_t arg{*this,mem};
+    cpu_function_argument_t arg{*this,*mem};
     instr_info.imm16 = mem.read(pc+1)|(mem.read(pc+2)<<8);
     if(opc==0xCB){
         uint8_t cb_opc = mem.read(pc+1);

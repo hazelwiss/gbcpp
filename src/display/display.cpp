@@ -10,8 +10,8 @@
 std::atomic_bool main_window::enable_debug_window{false};
 std::atomic_bool main_window::enable_display{false};
 interpreter_t main_window::placeholder{};
-std::atomic_bool main_window::request_handshake{false};
-std::atomic_bool main_window::allow_handshake{false};
+interpreter_t* main_window::interp_ref{&placeholder};
+std::condition_variable main_window::cv;
 
 GLFWwindow* window;
 std::thread thread;
@@ -67,11 +67,6 @@ void main_window::on_pause(){
 }
 
 void main_window::draw(){
-    if(request_handshake){
-        allow_handshake = true;
-        while(request_handshake);
-        allow_handshake = false;
-    }
     if(!glfwWindowShouldClose(window)){
         //  poll events.
         glfwPollEvents();

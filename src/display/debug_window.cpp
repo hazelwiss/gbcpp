@@ -10,7 +10,6 @@
 const std::string dbg_window::imgui_win_id = "dbg_debug_window";
 float dbg_window::size_x = 1000, dbg_window::size_y = 600;
 std::reference_wrapper<interpreter_t> dbg_window::interpreter{main_window::placeholder};
-interpreter_t* interp_arg{&main_window::placeholder};
 //  disassembler is globally instantiated
 disassembler_t disasm;
 //  ordered map for storing the disassembled code
@@ -19,7 +18,6 @@ std::unordered_map<uint16_t, std::string> labels;
 uint16_t breakpoint_insert;
 
 void dbg_window::hook(interpreter_t& interp){
-    interp_arg = &interp;
     interpreter = interp;
     disasm = {};
     disassembly = {};
@@ -29,11 +27,11 @@ void dbg_window::hook(interpreter_t& interp){
 }
 
 void dbg_window::on_pause(){
-    interpreter = *interp_arg;
+    interpreter.get().on_pause();
 }
 
 void dbg_window::on_play(){
-    interpreter = main_window::placeholder;
+    interpreter.get().on_unpause();
 }
 
 void dbg_window::disassemble(uint16_t adr){
@@ -72,7 +70,8 @@ void dbg_window::disassemble(uint16_t adr){
     adr += entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
     uint16_t branched_adr = disasm.get_branch_results(opc, adr, imm);
     disassemble(branched_adr);
-    disassemble(adr);
+    if(disasm.is_conditional(opc) || disasm.is_call(opc))
+        disassemble(adr);
 }
 
 void dbg_window::reset_disasm(){
@@ -105,13 +104,13 @@ void dbg_window::draw_reg_subwindow(){
                 "Z",  "N",
                 "H",  "C"
             };
-            std::array<uint16_t,6> regs = {
-                interp.cpu.regs.get<RI::AF>(),
-                interp.cpu.regs.get<RI::BC>(),
-                interp.cpu.regs.get<RI::DE>(),
-                interp.cpu.regs.get<RI::HL>(),
-                interp.cpu.regs.get<RI::SP>(),
-                interp.cpu.regs.get<RI::PC>()
+            std::array<uint16_t*,6> regs = {
+                &interp.cpu.regs.get<RI::AF>(),
+                &interp.cpu.regs.get<RI::BC>(),
+                &interp.cpu.regs.get<RI::DE>(),
+                &interp.cpu.regs.get<RI::HL>(),
+                &interp.cpu.regs.get<RI::SP>(),
+                &interp.cpu.regs.get<RI::PC>()
             };
             std::array<bool,4> flags = {
                 interp.cpu.regs.get_flag<FI::Z>(),
@@ -122,10 +121,10 @@ void dbg_window::draw_reg_subwindow(){
             for(size_t i = 0; i < 3; ++i){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::InputScalar(names[i*2].c_str(), ImGuiDataType_U16, &regs[i*2], 
+                ImGui::InputScalar(names[i*2].c_str(), ImGuiDataType_U16, regs[i*2], 
                     nullptr, nullptr, "%04X", ImGuiInputTextFlags_CharsHexadecimal);
                 ImGui::TableSetColumnIndex(1);
-                ImGui::InputScalar(names[i*2+1].c_str(), ImGuiDataType_U16, &regs[i*2+1], 
+                ImGui::InputScalar(names[i*2+1].c_str(), ImGuiDataType_U16, regs[i*2+1], 
                     nullptr, nullptr, "%04X", ImGuiInputTextFlags_CharsHexadecimal);
             }
             for(size_t i = 0; i < 2; ++i){
@@ -141,10 +140,11 @@ void dbg_window::draw_reg_subwindow(){
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
         ImGui::Text(text.c_str());
         if(ImGui::BeginTable(text.c_str(), 1, 0, {0,size_y/4.55f})){
+            uint32_t count = interp.call_deque.size();
             for(const auto& entry: interp.call_deque){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%04X -> %04X", entry.first, entry.second);
+                ImGui::Text("%d: %04X -> %04X", --count, entry.first, entry.second);
             }
             ImGui::EndTable();
         }
@@ -183,7 +183,7 @@ void dbg_window::draw_disasm_subwindow(){
                 }
                 if(interp.cpu.code_breakpoints.contains(entry.first)){
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::TextColored(col_red, "%s", interp.cpu.code_breakpoints[entry.first] ? "B" : "D");
+                    ImGui::TextColored(col_red, "%s", "B");
                 }
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text("%04X", entry.first);
@@ -197,51 +197,75 @@ void dbg_window::draw_disasm_subwindow(){
 }
 
 void dbg_window::draw_control_subwindow(){
+    auto& interp = interpreter.get();
     if(ImGui::BeginChild("control", {0,0}, true)){
         if(ImGui::ArrowButton("arrow", ImGuiDir_Right)){
-            interp_arg->paused = false;
+            interp.paused = false;
             on_play();
         }
         ImGui::SameLine();
         if(ImGui::Button("||")){
-            interp_arg->paused = true;
+            interp.paused = true;
             on_pause();
         }
         ImGui::SameLine();
+        ImGui::PushButtonRepeat(true);
         if(ImGui::Button("->")){
-            interp_arg->should_step = true;
+            interp.should_step = true;
         }
+        ImGui::PopButtonRepeat();
         ImGui::SameLine();
-        ImGui::Text("fps: %ld", interp_arg->fps.load());
+        ImGui::Text("fps: %ld", interp.fps.load());
         ImGui::SameLine();
-        ImGui::Text("%s", interp_arg->paused ? "paused" : "running");
+        ImGui::Text("%s", interp.paused ? "paused" : "running");
         //  breakpoints menu.
         ImGui::InputScalar("", ImGuiDataType_U16, &breakpoint_insert, nullptr, nullptr, "%04X", 
             ImGuiInputTextFlags_CharsHexadecimal);
         ImGui::SameLine();
         if(ImGui::Button("remove")){
-             interp_arg->cpu.code_breakpoints.erase(breakpoint_insert);
+            interp.cpu.code_breakpoints.erase(breakpoint_insert);
+            interp.mem.write_breakpoints.erase(breakpoint_insert);
+            interp.mem.read_breakpoints.erase(breakpoint_insert);
         }
         ImGui::Text("breakpoint: ");
         ImGui::SameLine();
         if(ImGui::Button("code")){
-            interp_arg->cpu.code_breakpoints[breakpoint_insert] = true;
+            interp.cpu.code_breakpoints[breakpoint_insert] = true;
         }
         ImGui::SameLine();
         if(ImGui::Button("write")){
-
+            interp.mem.write_breakpoints[breakpoint_insert] = true;
         }
         ImGui::SameLine();
         if(ImGui::Button("read")){
-
+            interp.mem.read_breakpoints[breakpoint_insert] = true;
         }
         if(ImGui::BeginChild("breakpoints",{0,0},true)){
-            if(ImGui::BeginTable("breakpoints", 1)){
-                ImGui::Text("code breakpoints:");
-                for(auto entry: interp_arg->cpu.code_breakpoints){
+            ImGui::Text("code breakpoints:");
+            if(ImGui::BeginTable("code breakpoints", 1)){
+                for(auto entry: interp.cpu.code_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%04X -> [%s]", entry.first, disassembly[entry.first].c_str());
+                    bool contains = disassembly.contains(entry.first);
+                    ImGui::Text("%04X -> [%s]", entry.first, contains ?  disassembly[entry.first].c_str() : "");
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Text("\nwrite breakpoints:");
+            if(ImGui::BeginTable("write breakpoints", 1)){
+                for(auto entry: interp.mem.write_breakpoints){
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%04X", entry.first);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Text("\nread breakpoints:");
+            if(ImGui::BeginTable("read breakpoints", 1)){
+                for(auto entry: interp.mem.read_breakpoints){
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%04X", entry.first);
                 }
                 ImGui::EndTable();
             }

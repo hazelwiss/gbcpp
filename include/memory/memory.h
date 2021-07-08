@@ -34,6 +34,7 @@ struct memory_t{
     std::unordered_map<uint16_t, bool> read_breakpoints;
     std::unordered_map<uint16_t, bool> write_breakpoints;
 protected:
+    uint8_t& parse_address(uint16_t adr);
     void bind_boot_rom();
     void unbind_boot_rom();
     void on_rom_write(uint16_t adr);

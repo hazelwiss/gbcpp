@@ -2,32 +2,7 @@
 #include<fstream>
 #include<iostream>
 
-uint8_t memory_t::read(uint16_t adr){
-    if(read_breakpoints.size() > 0){
-        if(read_breakpoints.contains(adr)){
-            if(read_breakpoints[adr] && read_breakpoint_callbk)
-                read_breakpoint_callbk(adr);
-        }
-    }
-    switch(adr){
-    case 0x100:             if(boot_rom_bound) unbind_boot_rom();
-    case 0x0000 ... 0x00FF:
-    case 0x0101 ... 0x3FFF:
-                            return rom1[adr];
-    case 0x4000 ... 0x7FFF: return rom2.get()[adr-0x4000];
-    case 0x8000 ... 0x9FFF: return vram[adr-0x8000];
-    case 0xA000 ... 0xBFFF: return ram_banks.get()[adr-0xA000];
-    case 0xC000 ... 0xCFFF: return wram[adr-0xC000];
-    case 0xD000 ... 0xDFFF: return wram_banks.get()[adr-0xD000];
-    //case 0xE000 ... 0xFDFF: 
-    case 0xFE00 ... 0xFE9F: return oam[adr-0xFE00];
-    case 0xFF00 ... 0xFF7F: return io_regs[adr-0xFF00];
-    case 0xFF80 ... 0xFFFE: return hram[adr-0xFF80];
-    }
-    return 0xFF;
-}
-
-uint8_t memory_t::debug_read(uint16_t adr){ //  doesn't unbind boot rom.
+uint8_t& memory_t::parse_address(uint16_t adr){
     switch(adr){
     case 0x0000 ... 0x3FFF: return rom1[adr];
     case 0x4000 ... 0x7FFF: return rom2.get()[adr-0x4000];
@@ -35,17 +10,38 @@ uint8_t memory_t::debug_read(uint16_t adr){ //  doesn't unbind boot rom.
     case 0xA000 ... 0xBFFF: return ram_banks.get()[adr-0xA000];
     case 0xC000 ... 0xCFFF: return wram[adr-0xC000];
     case 0xD000 ... 0xDFFF: return wram_banks.get()[adr-0xD000];
-    //case 0xE000 ... 0xFDFF: 
+    case 0xE000 ... 0xEFFF: return wram[adr-0xE000];                //  mirror
+    case 0xF000 ... 0xFDFF: return wram_banks.get()[adr-0xF000];    //  mirror
     case 0xFE00 ... 0xFE9F: return oam[adr-0xFE00];
+    case 0xFEA0 ... 0xFEFF: throw std::runtime_error("illegal ram access");
     case 0xFF00 ... 0xFF7F: return io_regs[adr-0xFF00];
     case 0xFF80 ... 0xFFFE: return hram[adr-0xFF80];
     }
-    return 0xFF;
+    return ie;
+}
+
+uint8_t memory_t::read(uint16_t adr){
+    if(read_breakpoints.size() > 0){
+        if(read_breakpoints.contains(adr)){
+            if(read_breakpoints[adr] && read_breakpoint_callbk)
+                read_breakpoint_callbk(adr);
+        }
+    }
+    if(adr == 0x100 && boot_rom_bound) 
+        unbind_boot_rom(); 
+    return parse_address(adr);
+}
+
+uint8_t memory_t::debug_read(uint16_t adr){ //  doesn't unbind boot rom.
+    return parse_address(adr);
 }
 
 void memory_t::write(uint16_t adr, uint8_t val){
-    if(adr == 0xFF01)
+    if(adr == 0xFF01){
+        if(val == '?')
+            int x = 0;
         std::cout << val;   //  tmp
+    }
     if(write_breakpoints.size() > 0){
         if(write_breakpoints.contains(adr)){
             if(write_breakpoints[adr] && write_breakpoint_callbk)
@@ -53,15 +49,8 @@ void memory_t::write(uint16_t adr, uint8_t val){
         }
     }
     switch(adr){
-    case 0x0000 ... 0x7FFF: on_rom_write(adr);                     break;
-    case 0x8000 ... 0x9FFF: vram[adr-0x8000]                = val; break;
-    case 0xA000 ... 0xBFFF: ram_banks.get()[adr-0xA000]     = val; break;
-    case 0xC000 ... 0xCFFF: wram[adr-0xC000]                = val; break;
-    case 0xD000 ... 0xDFFF: wram_banks.get()[adr-0xD000]    = val; break;
-    //case 0xE000 ... 0xFDFF:
-    case 0xFE00 ... 0xFE9F: oam[adr-0xFE00]                 = val; break;
-    case 0xFF00 ... 0xFF7F: io_regs[adr-0xFF00]             = val; break;
-    case 0xFF80 ... 0xFFFE: hram[adr-0xFF80]                = val; break;
+    case 0x0000 ... 0x7FFF: on_rom_write(adr); break;
+    default:                parse_address(adr) = val;
     }
 }
 
