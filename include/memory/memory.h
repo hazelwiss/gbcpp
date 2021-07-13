@@ -33,6 +33,7 @@ struct memory_t{
     std::function<void(uint16_t, uint8_t)> write_breakpoint_callbk;
     std::unordered_map<uint16_t, bool> read_breakpoints;
     std::unordered_map<uint16_t, bool> write_breakpoints;
+    const std::string& get_rom_path(){ return rom_path; }
 protected:
     uint8_t& parse_address(uint16_t adr);
     void bind_boot_rom();
@@ -41,15 +42,17 @@ protected:
     void parse_rom_info();
     bool boot_rom_bound{false};
     rom_info_t info;
-    rom_bank_t rom1, unbinded_rom;
+    rom_bank_t rom1, unbinded_rom{0};
     banks_t<rom_bank_t> rom2;
-    std::array<uint8_t,0x2000> vram;
+    std::array<uint8_t,0x2000> vram{0};
     banks_t<ram_bank_t> ram_banks;
-    std::array<uint8_t,0x1000> wram;
+    std::array<uint8_t,0x1000> wram{0};
     banks_t<std::array<uint8_t,0x1000>> wram_banks;
     //  echo ram???
-    std::array<uint8_t,0x9F> oam;
-    std::array<uint8_t,0x7F> io_regs;
-    std::array<uint8_t,0x7E> hram;
-    uint8_t ie;
+    std::array<uint8_t,0x9F> oam{0};
+    std::array<uint8_t,0x7F> io_regs{0};
+    std::array<uint8_t,0x5F> illegal{0};
+    std::array<uint8_t,0x7E> hram{0};
+    uint8_t ie{0};
+    std::string rom_path;
 };

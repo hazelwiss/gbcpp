@@ -56,15 +56,15 @@ consteval auto _get_switch(size_t i){
         }
     }
 }
-template<size_t reg>
+template<size_t reg, bool memory_op=false>
 consteval auto _get_switch_2(size_t func){
-    constexpr std::array<_cpu_function_prototype,8> func_ary = reg!=RI::HL ? 
+    constexpr std::array<_cpu_function_prototype,8> func_ary = !memory_op ? 
         (decltype(func_ary)){ add_a_r8<(RI8)reg>,adc_a_r8<(RI8)reg>,sub_a_r8<(RI8)reg>,sbc_a_r8<(RI8)reg>,
             and_a_r8<(RI8)reg>,xor_a_r8<(RI8)reg>,or_a_r8<(RI8)reg>,cp_a_r8<(RI8)reg> }
         :
-        (decltype(func_ary)){ add_a_pointer_hl,adc_pointer_hl,sub_a_pointer_hl, sbc_a_pointer_hl,
+        (decltype(func_ary)){ add_a_pointer_hl,adc_a_pointer_hl,sub_a_pointer_hl, sbc_a_pointer_hl,
             and_a_pointer_hl,xor_a_pointer_hl,or_a_pointer_hl,cp_a_pointer_hl };
-    constexpr size_t cycle_time = reg!=RI::HL ? 4:8;
+    constexpr size_t cycle_time = !memory_op ? 4:8;
     switch(func)
     {
     case 0: return _gen<1,cycle_time,cycle_time,func_ary[0]>();
@@ -97,7 +97,7 @@ const _instr_array instr_table::noncb_range = []() consteval{
     array[0x34] = _gen<1,12,12,inc_pointer_hl>();
     _FILL_PATTERN3(dec_r8,0x05,0x10,1,4,4,RI8::B,RI8::D,RI8::H);
     array[0x35] = _gen<1,12,12,dec_pointer_hl>();
-    _FILL_PATTERN3(ld_r8_n8, 0x06,0x10,2,8,8,RI8::B,RI8::D,RI8::H);
+    _FILL_PATTERN3(ld_r8_n8,0x06,0x10,2,8,8,RI8::B,RI8::D,RI8::H);
     array[0x36] = _gen<2,12,12,ld_pointer_hl_n8>();
     array[0x07] = _gen<1,4,4,rlca>();
     array[0x17] = _gen<1,4,4,rla>();
@@ -133,23 +133,25 @@ const _instr_array instr_table::noncb_range = []() consteval{
         }
     }
     for(size_t func = 0; func < 8; ++func){
-        for(size_t reg = 0; reg < 8; ++reg)
-        switch(reg){
-        case 0: array[0x80+reg+func*8]=_get_switch_2<RI::B>(func);     break;
-        case 1: array[0x80+reg+func*8]=_get_switch_2<RI::C>(func);     break;
-        case 2: array[0x80+reg+func*8]=_get_switch_2<RI::D>(func);     break;
-        case 3: array[0x80+reg+func*8]=_get_switch_2<RI::E>(func);     break;
-        case 4: array[0x80+reg+func*8]=_get_switch_2<RI::H>(func);     break;
-        case 5: array[0x80+reg+func*8]=_get_switch_2<RI::L>(func);     break;
-        case 6: array[0x80+reg+func*8]=_get_switch_2<RI::HL>(func);    break;
-        case 7: array[0x80+reg+func*8]=_get_switch_2<RI::A>(func);     break;
+        for(size_t reg = 0; reg < 8; ++reg){
+            switch(reg){
+            case 0: array[0x80+reg+func*8]=_get_switch_2<RI::B>(func);     break;
+            case 1: array[0x80+reg+func*8]=_get_switch_2<RI::C>(func);     break;
+            case 2: array[0x80+reg+func*8]=_get_switch_2<RI::D>(func);     break;
+            case 3: array[0x80+reg+func*8]=_get_switch_2<RI::E>(func);     break;
+            case 4: array[0x80+reg+func*8]=_get_switch_2<RI::H>(func);     break;
+            case 5: array[0x80+reg+func*8]=_get_switch_2<RI::L>(func);     break;
+            case 6: array[0x80+reg+func*8]=_get_switch_2<0,true>(func);    break;
+            case 7: array[0x80+reg+func*8]=_get_switch_2<RI::A>(func);     break;
+            }
         }
     }
     array[0xC0] = _gen<1,8,20,ret_cc<FI::Z,UNSET>>();
     array[0xD0] = _gen<1,8,20,ret_cc<FI::C,UNSET>>();
     array[0xE0] = _gen<2,12,12,ldh_pointer_n8_a>();
     array[0xF0] = _gen<2,12,12,ldh_a_pointer_n8>();
-    _FILL_PATTERN4(pop_r16,0xC1,0x10,1,12,12,RI16::BC,RI16::DE,RI16::HL,RI16::AF);
+    _FILL_PATTERN3(pop_r16,0xC1,0x10,1,12,12,RI16::BC,RI16::DE,RI16::HL);
+    array[0xF1] = _gen<1,12,12,pop_af>();
     array[0xC2] = _gen<3,12,16,jp_cc_n16<FI::Z,UNSET>>();
     array[0xD2] = _gen<3,12,16,jp_cc_n16<FI::C,UNSET>>();
     array[0xE2] = _gen<1,8,8,ldh_pointer_c_a>();
@@ -176,9 +178,7 @@ const _instr_array instr_table::noncb_range = []() consteval{
     array[0xDA] = _gen<3,12,16,jp_cc_n16<FI::C,SET>>();
     array[0xEA] = _gen<3,16,16,ld_pointer_n16_a>();
     array[0xFA] = _gen<3,16,16,ld_a_pointer_n16>();
-    //  PREFIX CB
     array[0xCB] = _gen<1,4,4,cb>();
-    //  PREFIX CB
     array[0xFB] = _gen<1,4,4,ei>();
     array[0xCC] = _gen<3,12,24,call_cc_n16<FI::Z,SET>>();
     array[0xDC] = _gen<3,12,24,call_cc_n16<FI::C,SET>>();
@@ -208,7 +208,7 @@ consteval RI8 determine_reg(){
 template<size_t iter=0>
 consteval void fill_cb_table_bit(_instr_array& arg){ 
     constexpr RI8 reg = determine_reg<iter>();
-    constexpr BIT bit = (BIT)(iter/8);
+    constexpr BIT bit = (BIT)(1<<(iter/8));
     if constexpr(iter >= 0x40)
         return;
     else 
@@ -221,7 +221,7 @@ consteval void fill_cb_table_bit(_instr_array& arg){
 template<size_t iter=0>
 consteval void fill_cb_table_res(_instr_array& arg){
     constexpr RI8 reg = determine_reg<iter>();
-    constexpr BIT bit = (BIT)(iter/8);
+    constexpr BIT bit = (BIT)(1<<(iter/8));
     if constexpr(iter >= 0x40)
         return;
     else 
@@ -234,7 +234,7 @@ consteval void fill_cb_table_res(_instr_array& arg){
 template<size_t iter=0>
 consteval void fill_cb_table_set(_instr_array& arg){
     constexpr RI8 reg = determine_reg<iter>();
-    constexpr BIT bit = (BIT)(iter/8);
+    constexpr BIT bit = (BIT)(1<<(iter/8));
     if constexpr(iter >= 0x40)
         return;
     else 
@@ -266,9 +266,9 @@ consteval void fill_first_quarter(_instr_array& arg){
 
 const _instr_array instr_table::cb_range = []() consteval{
     _instr_array array;
+    fill_first_quarter(array);
     fill_cb_table_bit(array);
     fill_cb_table_res(array);
     fill_cb_table_set(array);
-    fill_first_quarter(array);
     return array;
 }();

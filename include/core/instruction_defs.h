@@ -2,7 +2,7 @@
 #include<core/instructions.h>
 #include<stdexcept>
 
-enum class BIT:uint8_t{ B0=1,B1=2,B2=4,B3=8,B4=16,B5=32,B6=64,B7=128 };
+enum class BIT:uint8_t{ B0=0x1,B1=0x2,B2=0x4,B3=0x8,B4=0x10,B5=0x20,B6=0x40,B7=0x80 };
 enum class RST_VEC{ _00=0x00,_10=0x10,_20=0x20,_30=0x30,_08=0x08,_18=0x18,_28=0x28,_38=0x38 };
 
 namespace instr_defs{
@@ -51,7 +51,7 @@ namespace instr_defs{
     template<RI8 src> void adc_a_r8(cfa arg){
         __adc(arg, get_reg<src>(arg));
     }
-    inline void adc_pointer_hl(cfa arg){
+    inline void adc_a_pointer_hl(cfa arg){
         size_t val = arg.memory.read(get_reg<RI::HL>(arg));
         __adc(arg, val);
     }
@@ -61,12 +61,13 @@ namespace instr_defs{
     //  ADD 16
     template<RI16 src> void add_hl_r16(cfa arg){
         auto tmp = get_reg<RI::HL>(arg);
-        get_reg<RI::HL>(arg)+=get_reg<src>(arg);
+        auto source = get_reg<src>(arg);
+        get_reg<RI::HL>(arg)+=source;
         set_flag<FI::N>(arg,UNSET);
-        tmp>>=8;
-        auto src_tmp = get_reg<src>(arg)>>8;
-        set_flag<FI::H>(arg,(tmp&0x0F)+(src_tmp&0x0F)>0x0F);
-        set_flag<FI::C>(arg,tmp+src_tmp>0xFF); 
+        set_flag<FI::H>(arg,
+            (tmp&0x0FFF)+(source&0x0FFF)>0x0FFF);
+        set_flag<FI::C>(arg,
+            tmp+source>0xFFFF); 
     }
     inline void add_hl_sp(cfa arg){
         add_hl_r16<RI16::SP>(arg);
@@ -77,9 +78,9 @@ namespace instr_defs{
         set_flag<FI::Z>(arg,UNSET);
         set_flag<FI::N>(arg,UNSET);
         set_flag<FI::H>(arg,
-            (tmp&0x0F)-(arg.cpu.instr_info.imm8&0x0F)<0);
+            (tmp&0x0F)+((uint8_t)arg.cpu.instr_info.imm8&0x0F)>0x0F);
         set_flag<FI::C>(arg,
-            tmp+(int8_t)arg.cpu.instr_info.imm8>0xFF);
+            (tmp&0xFF)+(uint8_t)arg.cpu.instr_info.imm8>0xFF);
     }
     //  AND
     __always_inline void __and(cfa arg, uint8_t val){
@@ -114,31 +115,33 @@ namespace instr_defs{
     }
     //  CCF
     inline void ccf(cfa arg){
+        set_flag<FI::N>(arg,UNSET);
+        set_flag<FI::H>(arg,UNSET);
         set_flag<FI::C>(arg,!get_flag<FI::C>(arg));
     }
     //  CP
     __always_inline void __cp(cfa arg, uint8_t cmp){
         auto tmp = get_reg<RI::A>(arg);
-        set_flag<FI::Z>(arg,!(tmp-cmp));
+        set_flag<FI::Z>(arg,tmp==cmp);
         set_flag<FI::N>(arg,SET);
-        set_flag<FI::H>(arg,(tmp&0x0F)-(cmp&0x0F)<0);
-        set_flag<FI::C>(arg,tmp-cmp<0);
+        set_flag<FI::H>(arg,(tmp&0x0F)<(cmp&0x0F));
+        set_flag<FI::C>(arg,tmp<cmp);
     }
     template<RI8 src> void cp_a_r8(cfa arg){
-        __cp(arg, get_reg<src>(arg));
+        __cp(arg,get_reg<src>(arg));
     }
     inline void cp_a_pointer_hl(cfa arg){
         size_t val = arg.memory.read(get_reg<RI::HL>(arg));
-        __cp(arg, val);
+        __cp(arg,val);
     }
     inline void cp_a_n8(cfa arg){
-        __cp(arg, arg.cpu.instr_info.imm8);
+        __cp(arg,arg.cpu.instr_info.imm8);
     }
     //  CPL
     inline void cpl(cfa arg){
         auto& tmp = get_reg<RI::A>(arg);
         tmp = ~tmp;
-        set_flag<FI::Z>(arg,SET);
+        set_flag<FI::N>(arg,SET);
         set_flag<FI::H>(arg,SET);
     }
     //  DAA
@@ -149,7 +152,7 @@ namespace instr_defs{
     }
     //  DEC
     __always_inline void __dec(cfa arg, uint8_t& reg){
-        set_flag<FI::H>(arg,(reg&0x0F)-1<0);
+        set_flag<FI::H>(arg,(reg&0x0F)<1);
         --reg;
         set_flag<FI::Z>(arg,!reg);
         set_flag<FI::N>(arg,SET);
@@ -160,6 +163,7 @@ namespace instr_defs{
     inline void dec_pointer_hl(cfa arg){
         uint8_t val = arg.memory.read(get_reg<RI::HL>(arg));
         __dec(arg,val);
+        arg.memory.write(get_reg<RI::HL>(arg), val);
     }
     //  DEC 16
     template<RI16 dest> void dec_r16(cfa arg){
@@ -183,7 +187,7 @@ namespace instr_defs{
     }
     //  INC
     __always_inline void __inc(cfa arg, uint8_t& val){
-        set_flag<FI::H>(arg,(val&0x0F)+1>0x0F);
+        set_flag<FI::H>(arg,(val&0x0F)==0x0F);
         ++val;
         set_flag<FI::Z>(arg,!val);
         set_flag<FI::N>(arg,UNSET);
@@ -214,6 +218,7 @@ namespace instr_defs{
     }
     inline void jp_hl(cfa arg){
         get_reg<RI::PC>(arg)=get_reg<RI::HL>(arg);
+        arg.did_branch = true;
     }
     //  JR
     inline void jr_e8(cfa arg){
@@ -222,7 +227,7 @@ namespace instr_defs{
     }
     template<FI flag, BIT_VAL state>
     inline void jr_cc_e8(cfa arg){
-        if((arg.did_branch = get_flag<flag>(arg)==state))
+        if((arg.did_branch=get_flag<flag>(arg)==state))
             jr_e8(arg);
     }
     //  LD
@@ -236,10 +241,10 @@ namespace instr_defs{
         get_reg<dest>(arg)=arg.cpu.instr_info.imm16;
     }
     template<RI8 src> void ld_pointer_hl_r8(cfa arg){
-        arg.memory.write(get_reg<RI::HL>(arg), get_reg<src>(arg));
+        arg.memory.write(get_reg<RI::HL>(arg),get_reg<src>(arg));
     }
     inline void ld_pointer_hl_n8(cfa arg){
-        arg.memory.write(get_reg<RI::HL>(arg), arg.cpu.instr_info.imm8);
+        arg.memory.write(get_reg<RI::HL>(arg),arg.cpu.instr_info.imm8);
     }
     template<RI8 dest> void ld_r8_pointer_hl(cfa arg){
         get_reg<dest>(arg)=arg.memory.read(get_reg<RI::HL>(arg));
@@ -254,7 +259,7 @@ namespace instr_defs{
         get_reg<RI::A>(arg)=arg.memory.read(get_reg<src_pointer>(arg));
     }
     inline void ld_a_pointer_n16(cfa arg){
-        get_reg<RI::A>(arg)=arg.cpu.instr_info.imm16;
+        get_reg<RI::A>(arg)=arg.memory.read(arg.cpu.instr_info.imm16);
     }
     inline void ld_pointer_hl_increment_a(cfa arg){
         arg.memory.write(get_reg<RI::HL>(arg)++,get_reg<RI::A>(arg));
@@ -272,17 +277,19 @@ namespace instr_defs{
         get_reg<RI::SP>(arg)=arg.cpu.instr_info.imm16;
     }
     inline void ld_pointer_n16_sp(cfa arg){
-        arg.memory.write(arg.cpu.instr_info.imm16, get_reg<RI::SP>(arg));
+        arg.memory.write(arg.cpu.instr_info.imm16,get_reg<RI::SP>(arg));
         arg.memory.write(arg.cpu.instr_info.imm16+1,get_reg<RI::SP>(arg)>>8);
     }
     inline void ld_hl_sp_e8(cfa arg){
-        uint8_t hl = get_reg<RI::HL>(arg);
-        uint8_t sp = get_reg<RI::SP>(arg)+(int8_t)arg.cpu.instr_info.imm8;
-        get_reg<RI::HL>(arg)+=sp;
+        uint8_t sp = get_reg<RI::SP>(arg);
+        int8_t imm = arg.cpu.instr_info.imm8;
+        set_flag<FI::H>(arg,
+            (sp&0x0F)+(imm&0x0F)>0x0F);
+        set_flag<FI::C>(arg,
+            (sp&0xFF)+((uint8_t)imm)>0xFF);
+        get_reg<RI::HL>(arg)=sp+imm;
         set_flag<FI::Z>(arg,UNSET);
         set_flag<FI::N>(arg,UNSET);
-        set_flag<FI::H>(arg,(hl&0x0F)+(sp&0x0F)>0x0F);
-        set_flag<FI::C>(arg,hl+(sp&0xFF)>0xFF);
     }
     inline void ld_sp_hl(cfa arg){
         get_reg<RI::SP>(arg)=get_reg<RI::HL>(arg);
@@ -332,14 +339,20 @@ namespace instr_defs{
         uint16_t val = 0;
         auto& tmp = get_reg<RI::SP>(arg);
         val|=arg.memory.read(tmp++);
-        val|=arg.memory.read(tmp++)<<8;
+        val|=(arg.memory.read(tmp++)<<8);
         get_reg<dest>(arg) = val;
+    }
+    inline void pop_af(cfa arg){
+        uint16_t val = 0;
+        auto& tmp = get_reg<RI::SP>(arg);
+        val|=arg.memory.read(tmp++)&0xF0;
+        val|=(arg.memory.read(tmp++)<<8);
+        get_reg<RI::AF>(arg) = val;
     }
     //  CALL
     inline void call_n16(cfa arg){
         push_r16<RI::PC>(arg);
-        get_reg<RI::PC>(arg)=arg.cpu.instr_info.imm16;
-        arg.did_branch = true;
+        jp_n16(arg);
     }
     template<FI flag,BIT_VAL state> void call_cc_n16(cfa arg){
         if((arg.did_branch = get_flag<flag>(arg)==state))
@@ -347,11 +360,11 @@ namespace instr_defs{
     }
     //  RES
     template<BIT bit, RI8 dest> void res_u3_r8(cfa arg){
-        get_reg<dest>(arg)^=((uint8_t)bit&get_reg<dest>(arg));
+        get_reg<dest>(arg)&=~((uint8_t)bit);
     } 
     template<BIT bit> void res_u3_pointer_hl(cfa arg){
         uint8_t val = arg.memory.read(get_reg<RI::HL>(arg));
-        val^=((uint8_t)bit&val);
+        val&=~((uint8_t)bit);
         arg.memory.write(get_reg<RI::HL>(arg),val);
     }
     //  RET
@@ -360,12 +373,12 @@ namespace instr_defs{
         arg.did_branch = true;
     }
     template<FI flag,BIT_VAL state> void ret_cc(cfa arg){
-        if((arg.did_branch = get_flag<flag>(arg)==state))
+        if((arg.did_branch=get_flag<flag>(arg)==state))
             ret(arg);
     }
     inline void reti(cfa arg){
-        ei(arg);
         ret(arg);
+        ei(arg);
     }
     //  RL
     __always_inline void __rl(cfa arg, uint8_t& reg){
@@ -391,7 +404,7 @@ namespace instr_defs{
     }
     //  RLC
     __always_inline void __rlc(cfa arg, uint8_t& reg){
-        uint8_t bit = reg&0x80;
+        uint8_t bit = reg>>7;
         reg<<=1;
         reg|=bit;
         set_flag<FI::Z>(arg,!reg);
@@ -417,7 +430,7 @@ namespace instr_defs{
         set_flag<FI::C>(arg,reg&0b1);
         reg>>=1;
         reg|=carry;
-        set_flag<FI::Z>(arg,reg);
+        set_flag<FI::Z>(arg,!reg);
         set_flag<FI::N>(arg,UNSET);
         set_flag<FI::H>(arg,UNSET);
     }
@@ -436,10 +449,10 @@ namespace instr_defs{
     //  RRC
     __always_inline void __rrc(cfa arg, uint8_t& reg){
         uint8_t bit = reg&0b1;
-        set_flag<FI::C>(arg,reg&0b1);
+        set_flag<FI::C>(arg,bit);
         reg>>=1;
         reg|=(bit<<7);
-        set_flag<FI::Z>(arg,reg);
+        set_flag<FI::Z>(arg,!reg);
         set_flag<FI::N>(arg,UNSET);
         set_flag<FI::H>(arg,UNSET);
     }
@@ -458,6 +471,7 @@ namespace instr_defs{
     //  RST
     template<RST_VEC adr> void rst(cfa arg){
         get_reg<RI::PC>(arg)=static_cast<uint16_t>(adr);
+        arg.did_branch = true;
     }
     //  SCF
     inline void scf(cfa arg){
@@ -509,7 +523,7 @@ namespace instr_defs{
         arg.memory.write(get_reg<RI::HL>(arg),val);
     }
     //  SRL
-    __always_inline void __srl(cfa arg, uint8_t reg){
+    __always_inline void __srl(cfa arg, uint8_t& reg){
         set_flag<FI::C>(arg,reg&0b1);   
         reg>>=1;
         set_flag<FI::Z>(arg,!reg);
@@ -532,8 +546,8 @@ namespace instr_defs{
     //  SUB
     __always_inline void __sub(cfa arg, uint8_t val){
         auto& tmp = get_reg<RI::A>(arg);
-        set_flag<FI::H>(arg,(tmp&0x0F)-(val&0x0F)<0);
-        set_flag<FI::C>(arg,tmp-val<0);
+        set_flag<FI::H>(arg,(tmp&0x0F)<(val&0x0F));
+        set_flag<FI::C>(arg,tmp<val);
         tmp-=val;
         set_flag<FI::Z>(arg,!tmp);
         set_flag<FI::N>(arg,SET);

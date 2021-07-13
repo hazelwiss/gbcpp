@@ -3,6 +3,10 @@
 #include<chrono>
 
 interpreter_t::interpreter_t(){
+    init();
+}
+
+void interpreter_t::init(){
     //  memory callbacks.
     mem.unbind_bootrom_callbk = [&](){
         main_window::bind(*this);
@@ -21,23 +25,44 @@ interpreter_t::interpreter_t(){
         main_window::on_pause();
     };
     cpu.enter_call_callbk = [&](uint16_t p_pc, uint16_t c_pc){
+        mutex.lock();
         call_deque.push_front({p_pc, c_pc});
+        mutex.unlock();
     };
     cpu.ret_from_call_callbk = [&](){
+        mutex.lock();
         call_deque.pop_front();
+        mutex.unlock();
     };
     cpu.instruction_execute_callbk = [&](uint16_t adr, const std::string& mnemonic){
+        mutex.lock();
         recent_instr_deque.push_front({adr, mnemonic});
         if(recent_instr_deque.size() > 14)
             recent_instr_deque.pop_back();
+        mutex.unlock();
     };
     //  tmp
     cpu.code_breakpoints[0x101] = true;
 }
 
+void interpreter_t::reset(){
+    mutex.lock();
+    std::string cur_rom = this->mem.get_rom_path();
+    this->mem = memory_t{};
+    this->load_rom(cur_rom);
+    auto breakpoints = this->cpu.code_breakpoints;
+    this->cpu = cpu_t{this->mem};
+    this->cpu.code_breakpoints = breakpoints;
+    this->scheduler = scheduler_t{};
+    this->call_deque.clear();
+    this->recent_instr_deque.clear();
+    this->paused = false;
+    init();
+    mutex.unlock();
+}
+
 void interpreter_t::update(){
     while(paused){
-        main_window::handshake(mutex);
         if(should_step){
             should_step = false;
             break;

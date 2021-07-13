@@ -16,6 +16,8 @@ disassembler_t disasm;
 std::map<uint16_t, std::string> disassembly;
 std::unordered_map<uint16_t, std::string> labels;
 uint16_t breakpoint_insert;
+std::string search_string;
+constexpr size_t search_str_size = 256;
 
 void dbg_window::hook(interpreter_t& interp){
     interpreter = interp;
@@ -27,6 +29,9 @@ void dbg_window::hook(interpreter_t& interp){
 }
 
 void dbg_window::on_pause(){
+    reset_disasm();
+    disassemble();
+    labels = disasm.get_label_map();
     interpreter.get().on_pause();
 }
 
@@ -41,13 +46,9 @@ void dbg_window::disassemble(uint16_t adr){
     auto instr = (is_cb=(opc == 0xCB)) ? 
         instr_table::cb_range[interp.mem.debug_read(adr+1)] : 
         instr_table::noncb_range[opc];
-    if(adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr) >= 0x8000)
-        return;
-    else if(!entry_get<CPU_ENTRY::BYTE_LENGTH>(instr))
-        return;
     while(!disasm.is_noncb_branch(opc) || is_cb){    //  sees if the instruction is a branch.
-        if(!disassembly.contains(adr)){
-            if(opc != 0)
+        if(!disassembly.contains(adr) && adr < 0xE000){
+            if(opc!=0)
                 disassembly[adr] = disasm.disassemble(opc, adr, interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8));
         } else
             return;
@@ -56,27 +57,27 @@ void dbg_window::disassemble(uint16_t adr){
         instr = (is_cb=(opc == 0xCB)) ? 
             instr_table::cb_range[interp.mem.debug_read(adr+1)] : 
             instr_table::noncb_range[opc];
-        if(adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr) >= 0x8000)
-            return;
-        else if(!entry_get<CPU_ENTRY::BYTE_LENGTH>(instr))
+        if(!entry_get<CPU_ENTRY::BYTE_LENGTH>(instr))
             return;
     }
     if(!disassembly.contains(adr)){
-        disassembly[adr] = disasm.disassemble(interp.mem.debug_read(adr), 
+        disassembly[adr] = disasm.disassemble(opc, 
             adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr), interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8));
     } else 
         return;
-    uint16_t imm = interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8);
-    adr += entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
-    uint16_t branched_adr = disasm.get_branch_results(opc, adr, imm);
-    disassemble(branched_adr);
-    if(disasm.is_conditional(opc) || disasm.is_call(opc))
-        disassemble(adr);
+    uint16_t offset_adr = adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
+    if(disasm.is_labelifyable(opc)){
+        uint16_t imm = interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8);
+        uint16_t branched_adr = disasm.get_branch_results(opc, offset_adr, imm);
+        disassemble(branched_adr);
+    }
+    if(disasm.is_conditional(opc) || disasm.is_call(opc) || opc == 0xE9)
+        disassemble(offset_adr);
 }
 
 void dbg_window::reset_disasm(){
-    disasm = disassembler_t{};
-    disassembly = std::map<uint16_t, std::string> {};
+    disasm = {};
+    disassembly = {};
 }
 
 void dbg_window::draw(){
@@ -152,7 +153,7 @@ void dbg_window::draw_reg_subwindow(){
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
         ImGui::Text(text.c_str());
         if(ImGui::BeginTable(text.c_str(), 1)){
-            for(const auto& entry: interp.recent_instr_deque){
+            for(const auto entry: interp.recent_instr_deque){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("%04X: %s", entry.first, entry.second.c_str());
@@ -166,29 +167,37 @@ void dbg_window::draw_reg_subwindow(){
 void dbg_window::draw_disasm_subwindow(){
     auto& interp = interpreter.get();
     if(ImGui::BeginChild("disassembly", {size_x/2.2f,0}, true)){
-        if(ImGui::BeginTable("disassembly", 3, ImGuiTableFlags_SizingFixedFit)){
+        std::array<char, search_str_size>buffer;
+        std::fill(buffer.begin(), buffer.end(), 0);
+        ImGui::InputText("find:", buffer.data(), search_str_size);
+        search_string = buffer.data();
+        if(ImGui::BeginTable("disassembly", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY)){
             //  column 0: breakpoints   column 1: address
             //  column 2: mnemonic  
             ImVec4 col_green = {0.5,0.8,0.5,1};
             ImVec4 col_red = {0.8,0.5,0.5,1};
             for(auto& entry: disassembly){
+                if(search_string != "" && entry.second.find(search_string) == std::string::npos)
+                    continue;
                 if(labels.contains(entry.first)){
                     ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TextColored(col_green, "  %s:", labels[entry.first].c_str());
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::TextColored(col_green, "%s:", labels[entry.first].c_str());
                 }
                 ImGui::TableNextRow();
                 if(entry.first == interp.cpu.regs.get<RI::PC>()){
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, 0xAAAAAAAA);
                 }
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%s:", disasm.get_memory_region_string(entry.first).c_str());
                 if(interp.cpu.code_breakpoints.contains(entry.first)){
                     ImGui::TableSetColumnIndex(0);
                     ImGui::TextColored(col_red, "%s", "B");
                 }
-                ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%04X", entry.first);
                 ImGui::TableSetColumnIndex(2);
-                ImGui::TextColored(col_green, "%s", entry.second.c_str());
+                ImGui::Text("%04X", entry.first);
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextColored(col_green, "   %s", entry.second.c_str());
             }
             ImGui::EndTable();
         }
@@ -214,6 +223,10 @@ void dbg_window::draw_control_subwindow(){
             interp.should_step = true;
         }
         ImGui::PopButtonRepeat();
+        ImGui::SameLine();
+        if(ImGui::Button("RESET")){
+            interp.reset();
+        }
         ImGui::SameLine();
         ImGui::Text("fps: %ld", interp.fps.load());
         ImGui::SameLine();

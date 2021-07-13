@@ -61,8 +61,7 @@ struct cpu_register_bank_t{
     }
     template<FI f>
     constexpr bool get_flag(){
-        switch(f)
-        {
+        switch(f){
         case FI::Z: return af._narrow._l.z != 0;
         case FI::N: return af._narrow._l.n != 0;
         case FI::H: return af._narrow._l.h != 0;
@@ -71,8 +70,7 @@ struct cpu_register_bank_t{
     }
     template<FI f>
     constexpr void set_flag(bool set){
-        switch(f)
-        {
+        switch(f){
         case FI::Z: af._narrow._l.z = (set != 0); break;
         case FI::N: af._narrow._l.n = (set != 0); break;
         case FI::H: af._narrow._l.h = (set != 0); break;
@@ -88,7 +86,7 @@ struct cpu_t: schedule_component_base_t{
     cpu_t(memory_t& mem): mem{&mem} {}
     void tick_step(size_t ticks);
     bool halted{false},stopped{false};
-    struct { 
+    struct{ 
         void tick_t_cycles(size_t s){ t_cycles+=s; }
         size_t get_t_cycles(){ return t_cycles; }
         size_t get_m_cycles(){ return t_cycles/4; }
@@ -100,8 +98,10 @@ struct cpu_t: schedule_component_base_t{
     struct{
         uint8_t opcode;
         uint16_t ext_opcode;    //  used with cb
-        uint16_t imm16;
-        uint8_t& imm8{reinterpret_cast<uint8_t&>(imm16)};
+        union{
+            uint16_t imm16;
+            uint8_t imm8;
+        };
     } instr_info;
     struct memory_wrapper_t{
         memory_wrapper_t(memory_t* mem): mem{mem} {}        

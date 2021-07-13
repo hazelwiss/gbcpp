@@ -13,7 +13,7 @@ uint8_t& memory_t::parse_address(uint16_t adr){
     case 0xE000 ... 0xEFFF: return wram[adr-0xE000];                //  mirror
     case 0xF000 ... 0xFDFF: return wram_banks.get()[adr-0xF000];    //  mirror
     case 0xFE00 ... 0xFE9F: return oam[adr-0xFE00];
-    case 0xFEA0 ... 0xFEFF: throw std::runtime_error("illegal ram access");
+    case 0xFEA0 ... 0xFEFF: return illegal[adr-0xFEA0];
     case 0xFF00 ... 0xFF7F: return io_regs[adr-0xFF00];
     case 0xFF80 ... 0xFFFE: return hram[adr-0xFF80];
     }
@@ -38,9 +38,8 @@ uint8_t memory_t::debug_read(uint16_t adr){ //  doesn't unbind boot rom.
 
 void memory_t::write(uint16_t adr, uint8_t val){
     if(adr == 0xFF01){
-        if(val == '?')
-            int x = 0;
         std::cout << val;   //  tmp
+        //std::cout.flush();
     }
     if(write_breakpoints.size() > 0){
         if(write_breakpoints.contains(adr)){
@@ -58,6 +57,7 @@ void memory_t::load_rom(std::string path){
     std::ifstream stream{path, std::ios::binary};
     if(!stream)
         throw std::runtime_error("unable to locate rom");
+    rom_path = path;
     stream.read(reinterpret_cast<char*>(rom1.data()), rom1.size());
     parse_rom_info();
     std::vector<rom_bank_t> banks_vec;
