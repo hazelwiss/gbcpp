@@ -95,14 +95,6 @@ struct cpu_t: schedule_component_base_t{
     } timer;
     cpu_register_bank_t regs;
     bool ime{false};
-    struct{
-        uint8_t opcode;
-        uint16_t ext_opcode;    //  used with cb
-        union{
-            uint16_t imm16;
-            uint8_t imm8;
-        };
-    } instr_info;
     struct memory_wrapper_t{
         memory_wrapper_t(memory_t* mem): mem{mem} {}        
         uint8_t read(uint16_t adr){ return mem->read(adr); }
@@ -113,6 +105,8 @@ struct cpu_t: schedule_component_base_t{
     protected:
         memory_t* mem;
     } mem;
+    uint8_t immediate8(){ return mem.read(regs.get<RI::PC>()-1); }
+    uint16_t immediate16(){ return mem.read(regs.get<RI::PC>()-2)|(mem.read(regs.get<RI::PC>()-1)<<8); }
     //  debugging.
     disassembler_t disasm;
     std::unordered_map<uint16_t, bool> code_breakpoints;

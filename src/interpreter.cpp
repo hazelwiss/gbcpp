@@ -25,21 +25,16 @@ void interpreter_t::init(){
         main_window::on_pause();
     };
     cpu.enter_call_callbk = [&](uint16_t p_pc, uint16_t c_pc){
-        mutex.lock();
         call_deque.push_front({p_pc, c_pc});
-        mutex.unlock();
     };
     cpu.ret_from_call_callbk = [&](){
-        mutex.lock();
-        call_deque.pop_front();
-        mutex.unlock();
+        if(call_deque.size())
+            call_deque.pop_front();
     };
     cpu.instruction_execute_callbk = [&](uint16_t adr, const std::string& mnemonic){
-        mutex.lock();
         recent_instr_deque.push_front({adr, mnemonic});
         if(recent_instr_deque.size() > 14)
             recent_instr_deque.pop_back();
-        mutex.unlock();
     };
     //  tmp
     cpu.code_breakpoints[0x101] = true;
@@ -68,5 +63,7 @@ void interpreter_t::update(){
             break;
         }
     }
+    mutex.lock();
     cpu.tick_step(0);
+    mutex.unlock();
 }

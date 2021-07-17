@@ -27,12 +27,21 @@ consteval cpu_function_entry _gen(){
     static_assert(_bytes < 4, "invalid bytesize for instruction");
     return std::make_tuple<size_t,_instr_ticks_entry,_cpu_function_prototype>(_bytes,{_ticks,_br_ticks},_f);
 }
-template<size_t dest>
-consteval auto _get_switch(size_t i){
-    switch(dest)
-    {
-    case RI::HL:
-        switch(i%8){
+template<RI8 dest>
+consteval auto _get_switch_regs(size_t i){
+    switch(i%8){   
+        case 0: return _gen<1,4,4,ld_r8_r8<dest,RI8::B>>(); 
+        case 1: return _gen<1,4,4,ld_r8_r8<dest,RI8::C>>(); 
+        case 2: return _gen<1,4,4,ld_r8_r8<dest,RI8::D>>(); 
+        case 3: return _gen<1,4,4,ld_r8_r8<dest,RI8::E>>(); 
+        case 4: return _gen<1,4,4,ld_r8_r8<dest,RI8::H>>(); 
+        case 5: return _gen<1,4,4,ld_r8_r8<dest,RI8::L>>(); 
+        case 6: return _gen<1,8,8,ld_r8_pointer_hl<dest>>(); 
+        case 7: return _gen<1,4,4,ld_r8_r8<dest,RI8::A>>(); 
+    }
+}
+consteval auto _get_switch_hl(size_t i){
+     switch(i%8){
         case 0: return _gen<1,8,8,ld_pointer_hl_r8<RI8::B>>(); 
         case 1: return _gen<1,8,8,ld_pointer_hl_r8<RI8::C>>(); 
         case 2: return _gen<1,8,8,ld_pointer_hl_r8<RI8::D>>(); 
@@ -41,21 +50,9 @@ consteval auto _get_switch(size_t i){
         case 5: return _gen<1,8,8,ld_pointer_hl_r8<RI8::L>>(); 
         case 6: return _gen<1,4,4,halt>(); 
         case 7: return _gen<1,8,8,ld_pointer_hl_r8<RI8::A>>(); 
-        }
-        break; 
-    default:
-        switch(i%8){   
-        case 0: return _gen<1,4,4,ld_r8_r8<(RI8)dest,RI8::B>>(); 
-        case 1: return _gen<1,4,4,ld_r8_r8<(RI8)dest,RI8::C>>(); 
-        case 2: return _gen<1,4,4,ld_r8_r8<(RI8)dest,RI8::D>>(); 
-        case 3: return _gen<1,4,4,ld_r8_r8<(RI8)dest,RI8::E>>(); 
-        case 4: return _gen<1,4,4,ld_r8_r8<(RI8)dest,RI8::H>>(); 
-        case 5: return _gen<1,4,4,ld_r8_r8<(RI8)dest,RI8::L>>(); 
-        case 6: return _gen<1,8,8,ld_r8_pointer_hl<(RI8)dest>>(); 
-        case 7: return _gen<1,4,4,ld_r8_r8<(RI8)dest,RI8::A>>(); 
-        }
     }
 }
+
 template<size_t reg, bool memory_op=false>
 consteval auto _get_switch_2(size_t func){
     constexpr std::array<_cpu_function_prototype,8> func_ary = !memory_op ? 
@@ -65,8 +62,7 @@ consteval auto _get_switch_2(size_t func){
         (decltype(func_ary)){ add_a_pointer_hl,adc_a_pointer_hl,sub_a_pointer_hl, sbc_a_pointer_hl,
             and_a_pointer_hl,xor_a_pointer_hl,or_a_pointer_hl,cp_a_pointer_hl };
     constexpr size_t cycle_time = !memory_op ? 4:8;
-    switch(func)
-    {
+    switch(func){
     case 0: return _gen<1,cycle_time,cycle_time,func_ary[0]>();
     case 1: return _gen<1,cycle_time,cycle_time,func_ary[1]>();
     case 2: return _gen<1,cycle_time,cycle_time,func_ary[2]>();
@@ -122,14 +118,14 @@ const _instr_array instr_table::noncb_range = []() consteval{
     //  big block of instructions to generate inside of two for loops...
     for(size_t i = 0; i < 64; ++i){
         switch(i/8){ //  determine dest
-        case 0: array[0x40+i]= _get_switch<RI::B>(i); break;
-        case 1: array[0x40+i]= _get_switch<RI::C>(i); break;
-        case 2: array[0x40+i]= _get_switch<RI::D>(i); break;
-        case 3: array[0x40+i]= _get_switch<RI::E>(i); break;
-        case 4: array[0x40+i]= _get_switch<RI::H>(i); break;
-        case 5: array[0x40+i]= _get_switch<RI::L>(i); break;
-        case 6: array[0x40+i]= _get_switch<RI::HL>(i); break;
-        case 7: array[0x40+i]= _get_switch<RI::A>(i); break;
+        case 0: array[0x40+i]= _get_switch_regs<RI::B>(i); break;
+        case 1: array[0x40+i]= _get_switch_regs<RI::C>(i); break;
+        case 2: array[0x40+i]= _get_switch_regs<RI::D>(i); break;
+        case 3: array[0x40+i]= _get_switch_regs<RI::E>(i); break;
+        case 4: array[0x40+i]= _get_switch_regs<RI::H>(i); break;
+        case 5: array[0x40+i]= _get_switch_regs<RI::L>(i); break;
+        case 6: array[0x40+i]= _get_switch_hl(i);          break;
+        case 7: array[0x40+i]= _get_switch_regs<RI::A>(i); break;
         }
     }
     for(size_t func = 0; func < 8; ++func){
@@ -226,7 +222,7 @@ consteval void fill_cb_table_res(_instr_array& arg){
         return;
     else 
         fill_cb_table_res<iter+1>(arg);
-    arg[0x80+iter]= iter!=0 && iter%6==0 ? 
+    arg[0x80+iter]= iter!=0 && iter%8==6 ? 
         _gen<2,16,16,res_u3_pointer_hl<bit>>() 
         : _gen<2,8,8,res_u3_r8<bit,reg>>();
 }
@@ -239,7 +235,7 @@ consteval void fill_cb_table_set(_instr_array& arg){
         return;
     else 
         fill_cb_table_set<iter+1>(arg);
-    arg[0xC0+iter]= iter!=0 && iter%6==0 ? 
+    arg[0xC0+iter]= iter!=0 && iter%8==6 ? 
         _gen<2,16,16,set_u3_pointer_hl<bit>>() 
         : _gen<2,8,8,set_u3_r8<bit,reg>>();
 }
@@ -247,8 +243,7 @@ consteval void fill_cb_table_set(_instr_array& arg){
 template<size_t iter=0>
 consteval void fill_first_quarter(_instr_array& arg){
     constexpr RI8 reg = determine_reg<iter>();
-    switch(iter/8)
-    {
+    switch(iter/8){
     case 0: arg[iter]=iter%8==6 ? _gen<2,16,16,rlc_pointer_hl>()  : _gen<2,8,8,rlc_r8<reg>>();  break;
     case 1: arg[iter]=iter%8==6 ? _gen<2,16,16,rrc_pointer_hl>()  : _gen<2,8,8,rrc_r8<reg>>();  break;
     case 2: arg[iter]=iter%8==6 ? _gen<2,16,16,rl_pointer_hl>()   : _gen<2,8,8,rl_r8<reg>>();   break;

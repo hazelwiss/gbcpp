@@ -43,24 +43,26 @@ void dbg_window::disassemble(uint16_t adr){
     auto& interp = interpreter.get();
     bool is_cb;
     uint8_t opc = interp.mem.debug_read(adr);
-    auto instr = (is_cb=(opc == 0xCB)) ? 
+    auto instr = (is_cb = (opc == 0xCB)) ? 
         instr_table::cb_range[interp.mem.debug_read(adr+1)] : 
         instr_table::noncb_range[opc];
     while(!disasm.is_noncb_branch(opc) || is_cb){    //  sees if the instruction is a branch.
         if(!disassembly.contains(adr) && adr < 0xE000){
-            if(opc!=0)
+            if(!opc && disasm.get_label_map().contains(adr))
+                return;
+            if(opc)
                 disassembly[adr] = disasm.disassemble(opc, adr, interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8));
         } else
             return;
-        adr+=entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
+        adr += entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
         opc = interp.mem.debug_read(adr);
-        instr = (is_cb=(opc == 0xCB)) ? 
+        instr = (is_cb = (opc == 0xCB)) ? 
             instr_table::cb_range[interp.mem.debug_read(adr+1)] : 
             instr_table::noncb_range[opc];
         if(!entry_get<CPU_ENTRY::BYTE_LENGTH>(instr))
             return;
     }
-    if(!disassembly.contains(adr)){
+    if(!disassembly.contains(adr) && adr < 0xE000){
         disassembly[adr] = disasm.disassemble(opc, 
             adr+entry_get<CPU_ENTRY::BYTE_LENGTH>(instr), interp.mem.debug_read(adr+1)|(interp.mem.debug_read(adr+2)<<8));
     } else 
@@ -153,7 +155,7 @@ void dbg_window::draw_reg_subwindow(){
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
         ImGui::Text(text.c_str());
         if(ImGui::BeginTable(text.c_str(), 1)){
-            for(const auto entry: interp.recent_instr_deque){
+            for(auto entry: interp.recent_instr_deque){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("%04X: %s", entry.first, entry.second.c_str());

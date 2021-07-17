@@ -21,12 +21,14 @@ uint8_t& memory_t::parse_address(uint16_t adr){
 }
 
 uint8_t memory_t::read(uint16_t adr){
-    if(read_breakpoints.size() > 0){
-        if(read_breakpoints.contains(adr)){
-            if(read_breakpoints[adr] && read_breakpoint_callbk)
-                read_breakpoint_callbk(adr);
+    DEBUG_CALL(
+        if(read_breakpoints.size() > 0){
+            if(read_breakpoints.contains(adr)){
+                if(read_breakpoints[adr] && read_breakpoint_callbk)
+                    read_breakpoint_callbk(adr);
+            }
         }
-    }
+    );
     if(adr == 0x100 && boot_rom_bound) 
         unbind_boot_rom(); 
     return parse_address(adr);
@@ -37,16 +39,17 @@ uint8_t memory_t::debug_read(uint16_t adr){ //  doesn't unbind boot rom.
 }
 
 void memory_t::write(uint16_t adr, uint8_t val){
-    if(adr == 0xFF01){
-        std::cout << val;   //  tmp
-        //std::cout.flush();
-    }
-    if(write_breakpoints.size() > 0){
-        if(write_breakpoints.contains(adr)){
-            if(write_breakpoints[adr] && write_breakpoint_callbk)
-                write_breakpoint_callbk(adr, val);
+    DEBUG_CALL(
+        if(adr == 0xFF01){
+            std::cout << val;
         }
-    }
+        if(write_breakpoints.size() > 0){
+            if(write_breakpoints.contains(adr)){
+                if(write_breakpoints[adr] && write_breakpoint_callbk)
+                    write_breakpoint_callbk(adr, val);
+            }
+        }
+    );
     switch(adr){
     case 0x0000 ... 0x7FFF: on_rom_write(adr); break;
     default:                parse_address(adr) = val;
@@ -83,8 +86,10 @@ void memory_t::bind_boot_rom(){
 void memory_t::unbind_boot_rom(){
     boot_rom_bound = false;
     std::copy(unbinded_rom.begin(), unbinded_rom.end(), rom1.begin());
-    if(unbind_bootrom_callbk)
-        unbind_bootrom_callbk();
+    DEBUG_CALL(
+        if(unbind_bootrom_callbk)
+            unbind_bootrom_callbk();
+    );
 }
 
 void memory_t::on_rom_write(uint16_t adr){
