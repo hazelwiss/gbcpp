@@ -1,15 +1,13 @@
 #pragma once
 #include<common_defs.h>
-#include<core/cpu.h>
+#include<gameboy.h>
 #include<memory/memory.h>
 #include<array>
 #include<tuple>
 
 struct cpu_function_argument_t{
-    cpu_function_argument_t(cpu_t& cpu,memory_t& memory): 
-        cpu{cpu}, memory{memory} {}
-    cpu_t& cpu;
-    memory_t& memory;
+    cpu_function_argument_t(gameboy_t& gb): gb{gb} {}
+    gameboy_t& gb;
     bool did_branch{false};
 };
 using cfa = cpu_function_argument_t&;

@@ -1,17 +1,17 @@
 /*
     Gameboy colour emulator written in C++
 */
-#include<interpreter.h>
+#include<gameboy.h>
 #include<core/instructions.h>
 #include<display/display.h>
 
 int main(){
-    interpreter_t interp;
-    interp.load_rom("roms/test/gb-test-roms/cpu_instrs/individual/11-op a,(hl).gb");
-    main_window::bind(interp);
+    gameboy_t gb;
+    gb.load_rom("roms/test/gb-test-roms/cpu_instrs/individual/02-interrupts.gb");
+    main_window::bind(gb);
     main_window::init();
     main_window::start();
     while(true){
-        interp.update();
+        gb.update();
     }
 }

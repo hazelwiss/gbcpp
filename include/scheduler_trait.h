@@ -1,7 +1,13 @@
 #pragma once
+#include<concepts>
+#include<scheduler.h>
 
-struct schedule_component_info_t{};
-
-struct schedule_component_base_t{
-    //virtual inline schedule_component_info_t get_info() = delete;
+template<typename derived>
+struct scheduler_component_trait{
+    scheduler_component_trait() { post(); }
+private:
+    void post(){
+        static_assert(requires(derived s){ s.update(); }, 
+            "a scheduler component must implement void update() non-static member function.");
+    }
 };

@@ -81,37 +81,3 @@ private:
     cpu_register_t bc{0},de{0},hl{0},sp{0},pc{0};
     cpu_register_a_t af{0};
 };
-
-struct cpu_t: schedule_component_base_t{
-    cpu_t(memory_t& mem): mem{&mem} {}
-    void tick_step(size_t ticks);
-    bool halted{false},stopped{false};
-    struct{ 
-        void tick_t_cycles(size_t s){ t_cycles+=s; }
-        size_t get_t_cycles(){ return t_cycles; }
-        size_t get_m_cycles(){ return t_cycles/4; }
-    protected:
-        size_t t_cycles;
-    } timer;
-    cpu_register_bank_t regs;
-    bool ime{false};
-    struct memory_wrapper_t{
-        memory_wrapper_t(memory_t* mem): mem{mem} {}        
-        uint8_t read(uint16_t adr){ return mem->read(adr); }
-        void write(uint16_t adr, uint8_t val){ mem->write(adr, val); }
-        memory_t& get(){ return *mem; }
-        memory_t& operator*(){ return get(); }
-        memory_t& operator->(){ return get(); }
-    protected:
-        memory_t* mem;
-    } mem;
-    uint8_t immediate8(){ return mem.read(regs.get<RI::PC>()-1); }
-    uint16_t immediate16(){ return mem.read(regs.get<RI::PC>()-2)|(mem.read(regs.get<RI::PC>()-1)<<8); }
-    //  debugging.
-    disassembler_t disasm;
-    std::unordered_map<uint16_t, bool> code_breakpoints;
-    std::function<void(uint16_t, uint8_t, uint16_t)> code_breakpoints_callbk;
-    std::function<void(uint16_t, const std::string&)> instruction_execute_callbk;
-    std::function<void(uint16_t, uint16_t)> enter_call_callbk;
-    std::function<void()> ret_from_call_callbk;
-};

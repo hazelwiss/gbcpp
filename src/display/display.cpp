@@ -1,7 +1,7 @@
 #include<display/display.h>
 #include<display/imgui_backends.h>
 #include<display/debug_window.h>
-#include<interpreter.h>
+#include<gameboy.h>
 #include<GL/glew.h>
 #include<GLFW/glfw3.h>
 #include<iostream>
@@ -9,9 +9,6 @@
 
 std::atomic_bool main_window::enable_debug_window{false};
 std::atomic_bool main_window::enable_display{false};
-interpreter_t main_window::placeholder{};
-interpreter_t* main_window::interp_ref{&placeholder};
-std::condition_variable main_window::cv;
 
 GLFWwindow* window;
 std::thread thread;
@@ -50,8 +47,8 @@ void main_window::init(){
     thread = std::thread(threaded_loop);
 }
 
-void main_window::bind(interpreter_t& interp){
-    dbg_window::hook(interp);
+void main_window::bind(gameboy_t& gb){
+    dbg_window::hook(gb);
 }
 
 void main_window::start(){
