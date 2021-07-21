@@ -1,6 +1,7 @@
 #include<memory/memory.h>
 #include<fstream>
 #include<iostream>
+#include<gameboy.h>
 
 uint8_t& memory_t::parse_address(uint16_t adr){
     switch(adr){
@@ -21,42 +22,56 @@ uint8_t& memory_t::parse_address(uint16_t adr){
 }
 
 uint8_t memory_t::read(uint16_t adr){
-    DEBUG_CALL(
-        if(read_breakpoints.size() > 0){
-            if(read_breakpoints.contains(adr)){
-                if(read_breakpoints[adr] && read_breakpoint_callbk)
-                    read_breakpoint_callbk(adr);
-            }
+#ifdef __DEBUG__
+    if(dbg_read_breakpoints.size() > 0){
+        if(dbg_read_breakpoints.contains(adr)){
+            if(dbg_read_breakpoints[adr] && dbg_read_breakpoint_callbk)
+                dbg_read_breakpoint_callbk(adr);
         }
-    );
-    if(adr == 0x100 && boot_rom_bound) 
-        unbind_boot_rom(); 
-    return parse_address(adr);
+    }
+#endif 
+    switch(adr){
+    case 0xFF04:    return ((div_timestamp+gb->scheduler.get_cycles())/256);
+                    break;
+    case 0x0100:    if(boot_rom_bound) unbind_boot_rom();
+    default:        return parse_address(adr);
+    }
+}
+
+void memory_t::write(uint16_t adr, uint8_t val){
+#ifdef __DEBUG__
+    if(adr == 0xFF01){
+        std::cout << val;
+    }
+    if(dbg_write_breakpoints.size() > 0){
+        if(dbg_write_breakpoints.contains(adr)){
+            if(dbg_write_breakpoints[adr] && dbg_write_breakpoint_callbk)
+                dbg_write_breakpoint_callbk(adr, val);
+        }
+    }
+#endif
+    switch(adr){
+    case 0x0000 ... 0x7FFF: on_rom_write(adr);          
+                            break;
+    case 0xFF04:            div_timestamp = gb->scheduler.get_cycles(); 
+                            break;
+    case 0xFF0F:            gb->scheduler.add_event({1, {[&](){ gb->handle_interrupts(); }, scheduler_event::IE_WRITE}});
+                            parse_address(adr) = val;
+                            break;
+    case 0xFFFF:            gb->scheduler.add_event({1, {[&](){ gb->handle_interrupts(); }, scheduler_event::IE_WRITE}});
+    default:                parse_address(adr) = val;
+    }
 }
 
 uint8_t memory_t::debug_read(uint16_t adr){ //  doesn't unbind boot rom.
     return parse_address(adr);
 }
 
-void memory_t::write(uint16_t adr, uint8_t val){
-    DEBUG_CALL(
-        if(adr == 0xFF01){
-            std::cout << val;
-        }
-        if(write_breakpoints.size() > 0){
-            if(write_breakpoints.contains(adr)){
-                if(write_breakpoints[adr] && write_breakpoint_callbk)
-                    write_breakpoint_callbk(adr, val);
-            }
-        }
-    );
-    switch(adr){
-    case 0x0000 ... 0x7FFF: on_rom_write(adr); break;
-    default:                parse_address(adr) = val;
-    }
+void memory_t::debug_write(uint16_t adr, uint8_t val){
+    parse_address(adr) = val;
 }
 
-void memory_t::load_rom(std::string path){
+void memory_t::load_rom(const std::string& path){
     std::ifstream stream{path, std::ios::binary};
     if(!stream)
         throw std::runtime_error("unable to locate rom");
@@ -86,10 +101,10 @@ void memory_t::bind_boot_rom(){
 void memory_t::unbind_boot_rom(){
     boot_rom_bound = false;
     std::copy(unbinded_rom.begin(), unbinded_rom.end(), rom1.begin());
-    DEBUG_CALL(
-        if(unbind_bootrom_callbk)
-            unbind_bootrom_callbk();
-    );
+#ifdef __DEBUG__
+        if(dbg_unbind_bootrom_callbk)
+            dbg_unbind_bootrom_callbk();
+#endif
 }
 
 void memory_t::on_rom_write(uint16_t adr){

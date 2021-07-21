@@ -10,78 +10,74 @@ gameboy_t::gameboy_t(){
 }
 
 void gameboy_t::init(){
+#ifdef __DEBUG__
     //  memory callbacks.
-    mem.unbind_bootrom_callbk = [&](){
+    mem.dbg_unbind_bootrom_callbk = [&](){
         main_window::bind(*this);
     };
-    mem.read_breakpoint_callbk = [&](uint16_t adr){
-        paused = true;
+    mem.dbg_read_breakpoint_callbk = [&](uint16_t adr){
+        dbg_paused = true;
         main_window::on_pause();
     };
-    mem.write_breakpoint_callbk = [&](uint16_t adr, uint8_t val){
-        paused = true;
+    mem.dbg_write_breakpoint_callbk = [&](uint16_t adr, uint8_t val){
+        dbg_paused = true;
         main_window::on_pause();
     };
     //  cpu callbacks.
-    code_breakpoints_callbk = [&](uint16_t adr, uint8_t opc, uint16_t imm){
-        paused = true;
+    dbg_code_breakpoints_callbk = [&](uint16_t adr, uint8_t opc, uint16_t imm){
+        dbg_paused = true;
         main_window::on_pause();
     };
-    enter_call_callbk = [&](uint16_t p_pc, uint16_t c_pc){
-        call_deque.push_front({p_pc, c_pc});
+    dbg_enter_call_callbk = [&](uint16_t p_pc, uint16_t c_pc){
+        dbg_call_deque.push_front({p_pc, c_pc});
     };
-    ret_from_call_callbk = [&](){
-        if(call_deque.size())
-            call_deque.pop_front();
+    dbg_ret_from_call_callbk = [&](){
+        if(dbg_call_deque.size())
+            dbg_call_deque.pop_front();
     };
-    instruction_execute_callbk = [&](uint16_t adr, const std::string& mnemonic){
-        recent_instr_deque.push_front({adr, mnemonic});
-        if(recent_instr_deque.size() > 14)
-            recent_instr_deque.pop_back();
+    dbg_instruction_execute_callbk = [&](uint16_t adr, const std::string& mnemonic){
+        dbg_recent_instr_deque.push_front({adr, mnemonic});
+        if(dbg_recent_instr_deque.size() > 14)
+            dbg_recent_instr_deque.pop_back();
     };
-    //  tmp
-    code_breakpoints[0x101] = true;
+    dbg_code_breakpoints[0x101] = true;
+#endif
 }
 
-void gameboy_t::reset(){
-    mutex.lock();
+void gameboy_t::dbg_reset(){
+    std::mutex mut{};   //  needs to use as gameboy's mutex will be destructed.
+    mut.lock();
+    this->dbg_mutex.unlock();
     std::string cur_rom = this->mem.get_rom_path();
-    this->mem = memory_t{};
+    auto breakpoints = this->dbg_code_breakpoints;
+    *this = gameboy_t{};
+    this->dbg_code_breakpoints = breakpoints;
     this->load_rom(cur_rom);
-    auto breakpoints = this->code_breakpoints;
-    this->regs = cpu_register_bank_t{};
-    this->scheduler = scheduler_t{};
-    this->ime = false;
-    this->ime_change = false;
-    this->code_breakpoints = breakpoints;
-    this->scheduler = scheduler_t{};
-    this->call_deque.clear();
-    this->recent_instr_deque.clear();
-    this->paused = false;
-    init();
-    mutex.unlock();
+    mut.unlock();
 }
 
 void gameboy_t::update(){
-    DEBUG_CALL(
-        while(paused){
-            if(should_step){
-                should_step = false;
-                break;
-            }
+#ifdef __DEBUG__
+    while(dbg_paused){
+        if(dbg_should_step){
+            dbg_should_step = false;
+            break;
         }
-    );
-    mutex.lock();
+    }
+#endif
+    dbg_mutex.lock();
     while(scheduler.is_event_pending()){
         scheduler.process_events();
     }
     fetch_decode_execute();
-    mutex.unlock();
+    dbg_mutex.unlock();
 }
 
 void gameboy_t::fetch_decode_execute(){
     auto& pc = regs.get<RI::PC>();
+#ifdef __DEBUG__
     auto prev_pc = pc;
+#endif
     cpu_function_argument_t arg{*this};
     cpu_function_entry instr;
     size_t instr_size;
@@ -102,27 +98,27 @@ void gameboy_t::fetch_decode_execute(){
         std::abort();
     }
     auto cycles = entry_get<CPU_ENTRY::CYCLES>(instr);
-    //scheduler.tick_system(arg.did_branch ? cycles.first : cycles.second);
+    scheduler.tick_system(arg.did_branch ? cycles.first : cycles.second);
     //  debugging
-    DEBUG_CALL(
-        if(instruction_execute_callbk){
-            instruction_execute_callbk(prev_pc, 
-                disasm.disassemble(opcode, prev_pc+instr_size, immediate16()));
+#ifdef __DEBUG__
+    if(dbg_instruction_execute_callbk){
+        dbg_instruction_execute_callbk(prev_pc, 
+            dbg_disasm.disassemble(opcode, prev_pc+instr_size, immediate16()));
+    }
+    if(disassembler_t::is_call(opcode) && arg.did_branch){
+        if(dbg_enter_call_callbk)
+            dbg_enter_call_callbk(prev_pc, pc);
+    } else if(disassembler_t::is_ret(opcode) && arg.did_branch){
+        if(dbg_ret_from_call_callbk)
+            dbg_ret_from_call_callbk();
+    }
+    if(dbg_code_breakpoints.size() > 0){
+        if(dbg_code_breakpoints.contains(pc)){
+            if(dbg_code_breakpoints[pc] && dbg_code_breakpoints_callbk)
+                dbg_code_breakpoints_callbk(pc, opcode, immediate16());
         }
-        if(disassembler_t::is_call(opcode) && arg.did_branch){
-            if(enter_call_callbk)
-                enter_call_callbk(prev_pc, pc);
-        } else if(disassembler_t::is_ret(opcode) && arg.did_branch){
-            if(ret_from_call_callbk)
-                ret_from_call_callbk();
-        }
-        if(code_breakpoints.size() > 0){
-            if(code_breakpoints.contains(pc)){
-                if(code_breakpoints[pc] && code_breakpoints_callbk)
-                    code_breakpoints_callbk(pc, opcode, immediate16());
-            }
-        }
-    );
+    }
+#endif
 }
 
 uint8_t gameboy_t::immediate8(){
@@ -131,4 +127,44 @@ uint8_t gameboy_t::immediate8(){
 
 uint16_t gameboy_t::immediate16(){
     return mem.read(regs.get<RI::PC>() - 2) | (mem.read(regs.get<RI::PC>() - 1) <<8);
+}
+
+void gameboy_t::handle_interrupts(){
+    auto ie_var = mem.read(IE_ADR); 
+    auto if_var = mem.read(IF_ADR);
+    if(ie_var & if_var & 0x1F){
+        if(halted){
+            halted = false;
+            regs.get<RI::PC>()+=1;
+            scheduler.tick_system(4);
+        }
+        if(ime){
+            scheduler.tick_system(20);  //  tick 5 machine cycles
+            auto& sp = regs.get<RI::SP>();
+            mem.write(--sp, regs.get<RI::PC>() >> 8);
+            mem.write(--sp, regs.get<RI::PC>());
+            switch(if_var & ie_var){
+            case 0x01: 
+                regs.get<RI::PC>() = 0x40; 
+                mem.write(IF_ADR, if_var ^ 0x01);
+                break;
+            case 0x02:
+                regs.get<RI::PC>() = 0x48;
+                mem.write(IF_ADR, if_var ^ 0x02);
+                break;
+            case 0x04:
+                regs.get<RI::PC>() = 0x50;
+                mem.write(IF_ADR, if_var ^ 0x04);
+                break;
+            case 0x08:
+                regs.get<RI::PC>() = 0x58;
+                mem.write(IF_ADR, if_var ^ 0x08);
+                break;
+            case 0x10:
+                regs.get<RI::PC>() = 0x60;
+                mem.write(IF_ADR, if_var ^ 0x10);
+            }
+            ime = false;
+        }
+    }
 }

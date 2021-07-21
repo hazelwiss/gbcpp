@@ -25,19 +25,18 @@ void dbg_window::hook(gameboy_t& gb){
     disassembly = {};
     labels = {};
     disassemble();
+    disassemble(0x100);
     labels = disasm.get_label_map();
 }
 
 void dbg_window::on_pause(){
     reset_disasm();
     disassemble();
+    disassemble(0x100);
     labels = disasm.get_label_map();
-    (*gameboy).on_pause();
 }
 
-void dbg_window::on_play(){
-    (*gameboy).on_unpause();
-}
+void dbg_window::on_play(){}
 
 void dbg_window::disassemble(uint16_t adr){
     auto& gb = *gameboy;
@@ -143,8 +142,8 @@ void dbg_window::draw_reg_subwindow(){
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
         ImGui::Text(text.c_str());
         if(ImGui::BeginTable(text.c_str(), 1, 0, {0,size_y/4.55f})){
-            uint32_t count = gb.call_deque.size();
-            for(const auto& entry: gb.call_deque){
+            uint32_t count = gb.dbg_call_deque.size();
+            for(const auto& entry: gb.dbg_call_deque){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("%d: %04X -> %04X", --count, entry.first, entry.second);
@@ -155,7 +154,7 @@ void dbg_window::draw_reg_subwindow(){
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
         ImGui::Text(text.c_str());
         if(ImGui::BeginTable(text.c_str(), 1)){
-            for(auto entry: gb.recent_instr_deque){
+            for(auto entry: gb.dbg_recent_instr_deque){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("%04X: %s", entry.first, entry.second.c_str());
@@ -192,7 +191,7 @@ void dbg_window::draw_disasm_subwindow(){
                 }
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text("%s:", disasm.get_memory_region_string(entry.first).c_str());
-                if(gb.code_breakpoints.contains(entry.first)){
+                if(gb.dbg_code_breakpoints.contains(entry.first)){
                     ImGui::TableSetColumnIndex(0);
                     ImGui::TextColored(col_red, "%s", "B");
                 }
@@ -211,54 +210,54 @@ void dbg_window::draw_control_subwindow(){
     auto& gb = *gameboy;
     if(ImGui::BeginChild("control", {0,0}, true)){
         if(ImGui::ArrowButton("arrow", ImGuiDir_Right)){
-            gb.paused = false;
+            gb.dbg_paused = false;
             on_play();
         }
         ImGui::SameLine();
         if(ImGui::Button("||")){
-            gb.paused = true;
+            gb.dbg_paused = true;
             on_pause();
         }
         ImGui::SameLine();
         ImGui::PushButtonRepeat(true);
         if(ImGui::Button("->")){
-            gb.should_step = true;
+            gb.dbg_should_step = true;
         }
         ImGui::PopButtonRepeat();
         ImGui::SameLine();
         if(ImGui::Button("RESET")){
-            gb.reset();
+            gb.dbg_reset();
         }
         ImGui::SameLine();
         ImGui::Text("fps: %ld", gb.fps.load());
         ImGui::SameLine();
-        ImGui::Text("%s", gb.paused ? "paused" : "running");
+        ImGui::Text("%s", gb.dbg_paused ? "paused" : "running");
         //  breakpoints menu.
         ImGui::InputScalar("", ImGuiDataType_U16, &breakpoint_insert, nullptr, nullptr, "%04X", 
             ImGuiInputTextFlags_CharsHexadecimal);
         ImGui::SameLine();
         if(ImGui::Button("remove")){
-            gb.code_breakpoints.erase(breakpoint_insert);
-            gb.mem.write_breakpoints.erase(breakpoint_insert);
-            gb.mem.read_breakpoints.erase(breakpoint_insert);
+            gb.dbg_code_breakpoints.erase(breakpoint_insert);
+            gb.mem.dbg_write_breakpoints.erase(breakpoint_insert);
+            gb.mem.dbg_read_breakpoints.erase(breakpoint_insert);
         }
         ImGui::Text("breakpoint: ");
         ImGui::SameLine();
         if(ImGui::Button("code")){
-            gb.code_breakpoints[breakpoint_insert] = true;
+            gb.dbg_code_breakpoints[breakpoint_insert] = true;
         }
         ImGui::SameLine();
         if(ImGui::Button("write")){
-            gb.mem.write_breakpoints[breakpoint_insert] = true;
+            gb.mem.dbg_write_breakpoints[breakpoint_insert] = true;
         }
         ImGui::SameLine();
         if(ImGui::Button("read")){
-            gb.mem.read_breakpoints[breakpoint_insert] = true;
+            gb.mem.dbg_read_breakpoints[breakpoint_insert] = true;
         }
         if(ImGui::BeginChild("breakpoints",{0,0},true)){
             ImGui::Text("code breakpoints:");
             if(ImGui::BeginTable("code breakpoints", 1)){
-                for(auto entry: gb.code_breakpoints){
+                for(auto entry: gb.dbg_code_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     bool contains = disassembly.contains(entry.first);
@@ -268,7 +267,7 @@ void dbg_window::draw_control_subwindow(){
             }
             ImGui::Text("\nwrite breakpoints:");
             if(ImGui::BeginTable("write breakpoints", 1)){
-                for(auto entry: gb.mem.write_breakpoints){
+                for(auto entry: gb.mem.dbg_write_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%04X", entry.first);
@@ -277,7 +276,7 @@ void dbg_window::draw_control_subwindow(){
             }
             ImGui::Text("\nread breakpoints:");
             if(ImGui::BeginTable("read breakpoints", 1)){
-                for(auto entry: gb.mem.read_breakpoints){
+                for(auto entry: gb.mem.dbg_read_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%04X", entry.first);

@@ -9,35 +9,46 @@
 #include<atomic>
 #include<mutex>
 
+template<typename t>
+struct atomic: public std::atomic<t>{
+    using std::atomic<t>::atomic;
+    atomic& operator=(const atomic& arg){ this->store(arg.load()); return *this; }
+    atomic& operator=(const t& arg){ this->store(arg); return *this; }
+};
+
+struct mutex: std::mutex{
+    using std::mutex::mutex;
+    mutex& operator=(const mutex& arg){ std::copy(&arg, &arg+sizeof(mutex), this); return *this; }
+};
+
 struct gameboy_t{
     gameboy_t();
     void update();
     void load_rom(const std::string& path){ mem.load_rom(path); }
-    memory_t mem;
-    cpu_register_bank_t regs;
+    void handle_interrupts();
     uint8_t immediate8();
     uint16_t immediate16();
     scheduler_t scheduler;
-    bool ime{false}, ime_change{false}, ime_change_to_value;
+    memory_t mem{this};
+    cpu_register_bank_t regs;
+    bool ime{false};
     bool halted{false},stopped{false};
 protected:
     void init();
-    void reset();
-    void on_unpause(){}
-    void on_pause(){}
     void fetch_decode_execute();
-    std::atomic_bool paused{false};
-    std::atomic_bool should_step{false};
-    std::mutex mutex;
-    std::atomic_uint64_t fps{0};
+    atomic<size_t> fps{0};
     //  debugging.
-    disassembler_t disasm;
-    std::unordered_map<uint16_t, bool> code_breakpoints;
-    std::deque<std::pair<uint16_t,uint16_t>> call_deque;
-    std::deque<std::pair<uint16_t,std::string>> recent_instr_deque;
-    std::function<void(uint16_t, uint8_t, uint16_t)> code_breakpoints_callbk;
-    std::function<void(uint16_t, const std::string&)> instruction_execute_callbk;
-    std::function<void(uint16_t, uint16_t)> enter_call_callbk;
-    std::function<void()> ret_from_call_callbk;
+    void dbg_reset();
+    atomic<bool> dbg_paused{false};
+    atomic<bool> dbg_should_step{false};
+    disassembler_t dbg_disasm;
+    mutex dbg_mutex;
+    std::unordered_map<uint16_t, bool> dbg_code_breakpoints;
+    std::deque<std::pair<uint16_t,uint16_t>> dbg_call_deque;
+    std::deque<std::pair<uint16_t,std::string>> dbg_recent_instr_deque;
+    std::function<void(uint16_t, uint8_t, uint16_t)> dbg_code_breakpoints_callbk;
+    std::function<void(uint16_t, const std::string&)> dbg_instruction_execute_callbk;
+    std::function<void(uint16_t, uint16_t)> dbg_enter_call_callbk;
+    std::function<void()> dbg_ret_from_call_callbk;
     friend struct dbg_window;
 };

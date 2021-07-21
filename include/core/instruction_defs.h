@@ -193,11 +193,13 @@ namespace instr_defs{
     }
     //  DI
     inline void di(cfa arg){
-        arg.gb.ime = false;
+        //  pushes the event to disable ime 5 cycles into the future as to skip the next instruction.
+        arg.gb.scheduler.add_event({5, {[&](){ arg.gb.ime = false; }, scheduler_event::DI}});
     }
     //  EI
     inline void ei(cfa arg){
-        arg.gb.ime = true;
+        //  pushes the event to enable ime 5 cycles into the future as to skip the next instruction.
+        arg.gb.scheduler.add_event({5, {[&](){ arg.gb.ime = true; }, scheduler_event::EI}});
     }
     //  HALT
     inline void halt(cfa arg){

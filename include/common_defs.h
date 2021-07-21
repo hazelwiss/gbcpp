@@ -10,16 +10,7 @@
 //#define __DEBUG_LINE(...)
 //#endif
 
-#define __DEBUG__
-
-constexpr inline void DEBUG(auto lambda){
-#ifdef __DEBUG__
-    lambda();
-#endif 
-}
-
-#define DEBUG_CALL(body)    \
-DEBUG([&](){ body })                   
+#define __DEBUG__              
 
 constexpr double operator"" _n(long double seconds){
     return 1000000000*seconds;
