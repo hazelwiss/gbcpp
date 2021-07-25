@@ -47,11 +47,12 @@ struct memory_t{
     std::unordered_map<uint16_t, bool> dbg_read_breakpoints;
     std::unordered_map<uint16_t, bool> dbg_write_breakpoints;
 protected:
-    uint8_t& parse_address(uint16_t adr);
     void bind_boot_rom();
     void unbind_boot_rom();
-    void on_rom_write(uint16_t adr);
+    void on_rom_write(uint16_t adr, uint8_t val);
     void parse_rom_info();
+    void write_io(uint16_t adr, uint8_t val);
+    uint8_t read_io(uint16_t adr);
     bool boot_rom_bound{false};
     rom_info_t info;
     rom_bank_t rom1, unbinded_rom{0};

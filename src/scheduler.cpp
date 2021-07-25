@@ -2,7 +2,7 @@
 #include<stdexcept>
 
 bool scheduler_t::is_event_pending(){
-    if(!events.size())
+    if(events.empty())
         return false;
     return cycles >= events.top().first;
 }
@@ -14,8 +14,8 @@ void scheduler_t::process_events(){
     events.pop();
 }
 
-void scheduler_t::add_event(const event_pair_t& e){
-    events.push({e.first+cycles, e.second});
+void scheduler_t::add_event(const timestamp_t& stamp, const event_t& event){
+    events.push({stamp+cycles, event});
 }
 
 void scheduler_t::tick_system(size_t t_cycles){

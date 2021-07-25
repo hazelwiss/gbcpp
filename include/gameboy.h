@@ -6,20 +6,7 @@
 #include<scheduler.h>
 #include<memory/memory.h>
 #include<core/interpreter.h>
-#include<atomic>
-#include<mutex>
-
-template<typename t>
-struct atomic: public std::atomic<t>{
-    using std::atomic<t>::atomic;
-    atomic& operator=(const atomic& arg){ this->store(arg.load()); return *this; }
-    atomic& operator=(const t& arg){ this->store(arg); return *this; }
-};
-
-struct mutex: std::mutex{
-    using std::mutex::mutex;
-    mutex& operator=(const mutex& arg){ std::copy(&arg, &arg+sizeof(mutex), this); return *this; }
-};
+#include<deque>
 
 struct gameboy_t{
     gameboy_t();
@@ -36,13 +23,12 @@ struct gameboy_t{
 protected:
     void init();
     void fetch_decode_execute();
-    atomic<size_t> fps{0};
+    size_t fps{0};
     //  debugging.
     void dbg_reset();
-    atomic<bool> dbg_paused{false};
-    atomic<bool> dbg_should_step{false};
+    bool dbg_paused{false};
+    bool dbg_should_step{false};
     disassembler_t dbg_disasm;
-    mutex dbg_mutex;
     std::unordered_map<uint16_t, bool> dbg_code_breakpoints;
     std::deque<std::pair<uint16_t,uint16_t>> dbg_call_deque;
     std::deque<std::pair<uint16_t,std::string>> dbg_recent_instr_deque;

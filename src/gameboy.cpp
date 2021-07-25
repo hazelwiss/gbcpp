@@ -4,6 +4,9 @@
 #include<stdexcept>
 #include<chrono>
 #include<iostream>
+#include<mutex>
+
+std::mutex dbg_mutex;
 
 gameboy_t::gameboy_t(){
     init();
@@ -45,15 +48,15 @@ void gameboy_t::init(){
 }
 
 void gameboy_t::dbg_reset(){
-    std::mutex mut{};   //  needs to use as gameboy's mutex will be destructed.
-    mut.lock();
-    this->dbg_mutex.unlock();
+    dbg_mutex.lock();
     std::string cur_rom = this->mem.get_rom_path();
     auto breakpoints = this->dbg_code_breakpoints;
     *this = gameboy_t{};
+    init();
+    this->dbg_paused = true;
     this->dbg_code_breakpoints = breakpoints;
     this->load_rom(cur_rom);
-    mut.unlock();
+    dbg_mutex.unlock();
 }
 
 void gameboy_t::update(){
@@ -89,7 +92,7 @@ void gameboy_t::fetch_decode_execute(){
         instr = instr_table::noncb_range[opcode];
         instr_size = entry_get<CPU_ENTRY::BYTE_LENGTH>(instr);
     }
-    pc += instr_size;
+    pc += instr_size*(!halted);
     try{
         entry_get<CPU_ENTRY::FUNCTION>(instr)(arg);
     } catch(std::runtime_error& e){

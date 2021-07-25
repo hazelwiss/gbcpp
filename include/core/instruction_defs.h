@@ -194,17 +194,16 @@ namespace instr_defs{
     //  DI
     inline void di(cfa arg){
         //  pushes the event to disable ime 5 cycles into the future as to skip the next instruction.
-        arg.gb.scheduler.add_event({5, {[&](){ arg.gb.ime = false; }, scheduler_event::DI}});
+        arg.gb.scheduler.add_event(5, {[&](){ arg.gb.ime = false; }, scheduler_event::DI});
     }
     //  EI
     inline void ei(cfa arg){
         //  pushes the event to enable ime 5 cycles into the future as to skip the next instruction.
-        arg.gb.scheduler.add_event({5, {[&](){ arg.gb.ime = true; }, scheduler_event::EI}});
+        arg.gb.scheduler.add_event(5, {[&](){ arg.gb.ime = true; }, scheduler_event::EI});
     }
     //  HALT
     inline void halt(cfa arg){
-        //throw std::runtime_error("unimplemented instruction");
-        int unused;
+        arg.gb.halted = true;
     }
     //  INC
     __always_inline void __inc(cfa arg, uint8_t& val){
@@ -562,8 +561,7 @@ namespace instr_defs{
     }
     //  STOP
     inline void stop(cfa arg){
-        //  for the future
-        int unused;
+        throw std::runtime_error("unimplemented instruction");
     }
     //  SBC
     __always_inline void __sbc(cfa arg, uint8_t val, bool carry){

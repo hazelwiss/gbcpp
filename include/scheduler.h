@@ -12,7 +12,8 @@ enum class scheduler_event{
     IF_WRITE,
     IE_WRITE,
     EI,
-    DI  
+    DI,
+    TIMER 
 };
 
 using timestamp_t = size_t;
@@ -26,7 +27,7 @@ struct event_pair_t: public std::pair<timestamp_t, event_t>{
 struct scheduler_t{
     bool is_event_pending();
     void process_events();
-    void add_event(const event_pair_t&);
+    void add_event(const timestamp_t& stamp, const event_t& event);
     void tick_system(size_t t_cycles);
     size_t get_cycles();
 protected:

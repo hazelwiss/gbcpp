@@ -154,7 +154,7 @@ void dbg_window::draw_reg_subwindow(){
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x-ImGui::CalcTextSize(text.c_str()).x)/2);
         ImGui::Text(text.c_str());
         if(ImGui::BeginTable(text.c_str(), 1)){
-            for(auto entry: gb.dbg_recent_instr_deque){
+            for(auto& entry: gb.dbg_recent_instr_deque){
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("%04X: %s", entry.first, entry.second.c_str());
@@ -229,7 +229,7 @@ void dbg_window::draw_control_subwindow(){
             gb.dbg_reset();
         }
         ImGui::SameLine();
-        ImGui::Text("fps: %ld", gb.fps.load());
+        ImGui::Text("fps: %ld", gb.fps);
         ImGui::SameLine();
         ImGui::Text("%s", gb.dbg_paused ? "paused" : "running");
         //  breakpoints menu.
@@ -257,7 +257,7 @@ void dbg_window::draw_control_subwindow(){
         if(ImGui::BeginChild("breakpoints",{0,0},true)){
             ImGui::Text("code breakpoints:");
             if(ImGui::BeginTable("code breakpoints", 1)){
-                for(auto entry: gb.dbg_code_breakpoints){
+                for(auto& entry: gb.dbg_code_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     bool contains = disassembly.contains(entry.first);
@@ -267,7 +267,7 @@ void dbg_window::draw_control_subwindow(){
             }
             ImGui::Text("\nwrite breakpoints:");
             if(ImGui::BeginTable("write breakpoints", 1)){
-                for(auto entry: gb.mem.dbg_write_breakpoints){
+                for(auto& entry: gb.mem.dbg_write_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%04X", entry.first);
@@ -276,7 +276,7 @@ void dbg_window::draw_control_subwindow(){
             }
             ImGui::Text("\nread breakpoints:");
             if(ImGui::BeginTable("read breakpoints", 1)){
-                for(auto entry: gb.mem.dbg_read_breakpoints){
+                for(auto& entry: gb.mem.dbg_read_breakpoints){
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%04X", entry.first);
