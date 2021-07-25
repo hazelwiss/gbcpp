@@ -561,7 +561,7 @@ namespace instr_defs{
     }
     //  STOP
     inline void stop(cfa arg){
-        throw std::runtime_error("unimplemented instruction");
+        //throw std::runtime_error("unimplemented instruction");
     }
     //  SBC
     __always_inline void __sbc(cfa arg, uint8_t val, bool carry){

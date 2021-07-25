@@ -7,7 +7,7 @@
 
 int main(){
     gameboy_t gb;
-    gb.load_rom("roms/test/gb-test-roms/cpu_instrs/individual/02-interrupts.gb");
+    gb.load_rom("roms/test/gb-test-roms/cpu_instrs/cpu_instrs.gb");
     main_window::bind(gb);
     main_window::init();
     main_window::start();
